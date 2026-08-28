@@ -1,0 +1,50 @@
+# OpenWrt build artifacts (WSL)
+*.o
+*.a
+*.so
+*.ipk
+*.bin
+*.img
+*.gz
+
+# Go
+cloud/bin/
+cloud/tmp/
+*.exe
+*.test
+vendor/
+
+# Node
+node_modules/
+dist/
+.vite/
+*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets & certs
+*.pem
+*.key
+.env
+.env.local
+cloud/.env
+
+# Logs
+*.log
+logs/
+
+# Docker volumes
+cloud/data/
+
+# Temp
+tmp/
+temp/
+*.tmp

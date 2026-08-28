@@ -1,0 +1,11 @@
+
+config main 'main'
+	option enabled '1'
+	option cloud_url 'https://portal.local:8443'
+	option poll_interval '5'
+	option report_interval '60'
+	option device_id ''
+	option device_secret ''
+	option quota_file '/etc/nds-agent/quota.json'
+	option events_file '/tmp/nds-events.jsonl'
+	option pending_events '/etc/nds-agent/pending_events.jsonl'

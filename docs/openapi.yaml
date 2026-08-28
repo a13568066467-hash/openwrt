@@ -1,0 +1,106 @@
+openapi: 3.0.3
+info:
+  title: NDS Billing API
+  version: 1.0.0
+  description: OpenWrt WiFi 认证计费系统 API
+
+servers:
+  - url: http://localhost:8080/api/v1
+
+paths:
+  /admin/login:
+    post:
+      summary: 管理员登录
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username: { type: string }
+                password: { type: string }
+      responses:
+        '200':
+          description: 返回 JWT token
+
+  /admin/routers:
+    get:
+      summary: 设备列表
+      security: [{ bearerAuth: [] }]
+
+  /admin/users:
+    get:
+      summary: 用户列表
+      security: [{ bearerAuth: [] }]
+
+  /admin/users/{id}/quota:
+    post:
+      summary: 调整用户流量 (MB)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+
+  /admin/plans:
+    get:
+      summary: 套餐列表
+      security: [{ bearerAuth: [] }]
+    post:
+      summary: 创建套餐
+      security: [{ bearerAuth: [] }]
+
+  /admin/vouchers/batch:
+    post:
+      summary: 生成卡密批次
+      security: [{ bearerAuth: [] }]
+
+  /user/login:
+    post:
+      summary: 用户登录
+
+  /user/register:
+    post:
+      summary: 用户注册
+
+  /user/profile:
+    get:
+      summary: 用户资料
+      security: [{ bearerAuth: [] }]
+
+  /user/redeem:
+    post:
+      summary: 卡密充值
+      security: [{ bearerAuth: [] }]
+
+  /device/register:
+    post:
+      summary: 设备注册
+
+  /device/report:
+    post:
+      summary: 用量上报
+      parameters:
+        - name: X-Device-ID
+          in: header
+          schema: { type: string }
+        - name: X-Device-Secret
+          in: header
+          schema: { type: string }
+
+  /device/heartbeat:
+    post:
+      summary: 设备心跳
+
+  /fas:
+    get:
+      summary: FAS 门户 (openNDS level 4)
+    post:
+      summary: FAS 登录/注册
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
