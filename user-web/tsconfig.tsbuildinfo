@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/api.ts","./src/main.tsx","./src/components/tabbar.tsx","./src/pages/devicespage.tsx","./src/pages/homepage.tsx","./src/pages/loginpage.tsx","./src/pages/planspage.tsx","./src/pages/rechargepage.tsx","./src/pages/usagepage.tsx"],"errors":true,"version":"5.7.3"}
