@@ -42,16 +42,54 @@ func TestTopUpAndConsume(t *testing.T) {
 	}
 }
 
-func TestInsufficientQuota(t *testing.T) {
+// Traffic reported by a router has already been carried, so an overshoot is
+// booked down to a zero balance rather than rejected.
+func TestConsumeClampsOvershootToZero(t *testing.T) {
 	db := setupTestDB(t)
 	svc := ledger.New(db)
 
 	user := database.User{Username: "test2", QuotaRemainingBytes: 100}
 	db.Create(&user)
 
-	_, err := svc.Consume(user.ID, 200, "session2")
+	balance, err := svc.Consume(user.ID, 200, "session2")
+	if err != nil {
+		t.Fatalf("consume: %v", err)
+	}
+	if balance != 0 {
+		t.Fatalf("balance = %d, want 0", balance)
+	}
+
+	var entry database.QuotaLedger
+	db.Where("user_id = ?", user.ID).Order("id desc").First(&entry)
+	if entry.AmountBytes != -100 {
+		t.Errorf("booked %d bytes, want the 100 that were actually available", entry.AmountBytes)
+	}
+	if entry.BalanceAfter != 0 {
+		t.Errorf("balance_after = %d, want 0", entry.BalanceAfter)
+	}
+}
+
+// Administrative deductions are a different matter: they must not silently
+// take less than asked.
+func TestAdminDeductionRejectsOverdraft(t *testing.T) {
+	db := setupTestDB(t)
+	svc := ledger.New(db)
+
+	user := database.User{Username: "test2b", QuotaRemainingBytes: 100}
+	db.Create(&user)
+
+	err := db.Transaction(func(tx *gorm.DB) error {
+		_, err := svc.ChangeQuota(tx, user.ID, -200, "admin_adjust", "ref", "", nil)
+		return err
+	})
 	if err != ledger.ErrInsufficientQuota {
 		t.Fatalf("expected insufficient quota, got %v", err)
+	}
+
+	var stored database.User
+	db.First(&stored, user.ID)
+	if stored.QuotaRemainingBytes != 100 {
+		t.Errorf("balance = %d, want the rejected deduction to leave it untouched", stored.QuotaRemainingBytes)
 	}
 }
 

@@ -56,6 +56,7 @@ func New(db *gorm.DB, cfg *config.Config) http.Handler {
 			r.Get("/users", adminHandler.ListUsers)
 			r.Post("/users/{id}/quota", adminHandler.AdjustQuota)
 			r.Put("/users/{id}/rate", adminHandler.UpdateUserRate)
+			r.Post("/users/{id}/kick", adminHandler.KickUser)
 			r.Get("/plans", adminHandler.ListPlans)
 			r.Post("/plans", adminHandler.CreatePlan)
 			r.Put("/plans/{id}", adminHandler.UpdatePlan)

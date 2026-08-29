@@ -17,7 +17,9 @@ define Package/nds-profile
   SECTION:=net
   CATEGORY:=Network
   TITLE:=NDS Billing Default Profile
-  DEPENDS:=+opennds +nds-agent +dnsmasq-full +firewall4 +kmod-nft-core
+  # nds-hooks is named explicitly because the profile points openNDS's binauth
+  # option straight at the script it installs.
+  DEPENDS:=+opennds +nds-agent +nds-hooks +dnsmasq-full +firewall4 +kmod-nft-core
 endef
 
 define Package/nds-profile/description
@@ -25,9 +27,23 @@ define Package/nds-profile/description
   walled garden, and IPv6 disable on guest interface.
 endef
 
+# UCI defaults only; skip the default configure/compile recipes, which would
+# otherwise run make in an empty build directory and fail.
+define Build/Prepare
+	mkdir -p $(PKG_BUILD_DIR)
+endef
+
+define Build/Configure
+endef
+
+define Build/Compile
+endef
+
 define Package/nds-profile/install
 	$(INSTALL_DIR) $(1)/etc/uci-defaults
 	$(INSTALL_BIN) ./files/etc/uci-defaults/99-nds-profile $(1)/etc/uci-defaults/
+	$(INSTALL_DIR) $(1)/etc/init.d
+	$(INSTALL_BIN) ./files/etc/init.d/nds-late $(1)/etc/init.d/
 endef
 
 $(eval $(call BuildPackage,nds-profile))

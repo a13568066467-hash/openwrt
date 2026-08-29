@@ -66,13 +66,36 @@ func (s *Service) TopUp(userID uint, amountBytes int64, reference, note string, 
 	return balance, err
 }
 
+// Consume books traffic that has already been carried, so it clamps at zero
+// instead of failing on an overdraft. A router reports every 60 seconds and
+// only stops a client once its own copy of the balance runs out, so the final
+// delta of a session routinely overshoots; rejecting it would leave that
+// traffic unbilled and the balance stuck above zero forever.
 func (s *Service) Consume(userID uint, amountBytes int64, reference string) (int64, error) {
 	var balance int64
+
 	err := s.db.Transaction(func(tx *gorm.DB) error {
+		var user database.User
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&user, userID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrUserNotFound
+			}
+			return err
+		}
+
+		booked := amountBytes
+		if booked > user.QuotaRemainingBytes {
+			booked = user.QuotaRemainingBytes
+		}
+		if booked < 0 {
+			booked = 0
+		}
+
 		var err error
-		balance, err = s.ChangeQuota(tx, userID, -amountBytes, "consume", reference, "", nil)
+		balance, err = s.ChangeQuota(tx, userID, -booked, "consume", reference, "", nil)
 		return err
 	})
+
 	return balance, err
 }
 

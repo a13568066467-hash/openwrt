@@ -18,7 +18,9 @@ define Package/nds-agent
   SECTION:=net
   CATEGORY:=Network
   TITLE:=NDS Billing Agent (ucode)
-  DEPENDS:=+ucode +ucode-mod-fs +ucode-mod-uloop +ucode-mod-uci +ucode-mod-digest +ucode-mod-uclient +ucode-mod-json-c +opennds +nds-hooks
+  # The agent polls on a plain sleep loop, so no uloop binding is needed.
+  # curl is the HTTPS transport; uclient-fetch is only a fallback.
+  DEPENDS:=+ucode +ucode-mod-fs +ucode-mod-uci +curl +opennds +nds-hooks
 endef
 
 define Package/nds-agent/description
@@ -26,12 +28,26 @@ define Package/nds-agent/description
   and cloud sync for NDS billing system.
 endef
 
+# Nothing is compiled: the package only ships ucode and configuration. Without
+# these overrides the default recipe would run ./configure and make in an empty
+# build directory and fail.
+define Build/Prepare
+	mkdir -p $(PKG_BUILD_DIR)
+endef
+
+define Build/Configure
+endef
+
+define Build/Compile
+endef
+
 define Package/nds-agent/install
 	$(INSTALL_DIR) $(1)/usr/lib/nds-agent
 	$(INSTALL_BIN) ./files/usr/lib/nds-agent/main.uc $(1)/usr/lib/nds-agent/
-	$(INSTALL_BIN) ./files/usr/lib/nds-agent/ndsctl.uc $(1)/usr/lib/nds-agent/
-	$(INSTALL_BIN) ./files/usr/lib/nds-agent/quota.uc $(1)/usr/lib/nds-agent/
-	$(INSTALL_BIN) ./files/usr/lib/nds-agent/sync.uc $(1)/usr/lib/nds-agent/
+	$(INSTALL_DATA) ./files/usr/lib/nds-agent/ndsctl.uc $(1)/usr/lib/nds-agent/
+	$(INSTALL_DATA) ./files/usr/lib/nds-agent/quota.uc $(1)/usr/lib/nds-agent/
+	$(INSTALL_DATA) ./files/usr/lib/nds-agent/http.uc $(1)/usr/lib/nds-agent/
+	$(INSTALL_DATA) ./files/usr/lib/nds-agent/cloud.uc $(1)/usr/lib/nds-agent/
 	$(INSTALL_DIR) $(1)/etc/config
 	$(INSTALL_CONF) ./files/etc/config/nds-agent $(1)/etc/config/
 	$(INSTALL_DIR) $(1)/etc/init.d

@@ -77,8 +77,57 @@ func (h *Handler) AdjustQuota(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.pushQuota(uint(id), balance)
 	h.audit(adminID, "adjust_quota", "user", uint(id), req.Note)
 	json.NewEncoder(w).Encode(map[string]interface{}{"balance_bytes": balance, "type": ledgerType})
+}
+
+// pushQuota tells the routers a user is currently online through to adopt a new
+// balance. Without it the router keeps enforcing its cached figure until the
+// next report, so a top-up would not restore service for up to a minute.
+func (h *Handler) pushQuota(userID uint, balance int64) {
+	var sessions []database.Session
+	h.db.Where("user_id = ? AND active = ?", userID, true).Find(&sessions)
+
+	for _, s := range sessions {
+		h.db.Create(&database.RouterCommand{
+			RouterID:       s.RouterID,
+			Action:         "set_quota",
+			MAC:            s.MAC,
+			UserID:         userID,
+			RemainingBytes: balance,
+		})
+	}
+}
+
+// KickUser ends a user's session immediately by queueing a deauth for the
+// router they are on and closing the session record.
+func (h *Handler) KickUser(w http.ResponseWriter, r *http.Request) {
+	id, _ := strconv.ParseUint(r.PathValue("id"), 10, 64)
+	adminID := auth.GetAdminID(r.Context())
+
+	var sessions []database.Session
+	h.db.Where("user_id = ? AND active = ?", uint(id), true).Find(&sessions)
+
+	if len(sessions) == 0 {
+		json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "kicked": 0})
+		return
+	}
+
+	now := time.Now()
+	for _, s := range sessions {
+		h.db.Create(&database.RouterCommand{
+			RouterID: s.RouterID,
+			Action:   "deauth",
+			MAC:      s.MAC,
+			UserID:   uint(id),
+		})
+		h.db.Model(&database.Session{}).Where("id = ?", s.ID).
+			Updates(map[string]interface{}{"active": false, "ended_at": now})
+	}
+
+	h.audit(adminID, "kick_user", "user", uint(id), "")
+	json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "kicked": len(sessions)})
 }
 
 func (h *Handler) UpdateUserRate(w http.ResponseWriter, r *http.Request) {

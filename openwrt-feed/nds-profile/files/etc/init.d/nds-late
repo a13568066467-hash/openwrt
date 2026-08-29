@@ -1,0 +1,19 @@
+#!/bin/sh /etc/rc.common
+# Restart openNDS after the guest bridge is fully configured.
+#
+# openNDS exits immediately when gatewayinterface has no address yet. procd
+# respawn helps, but a single late restart after network (S20) is cheaper than
+# letting it spin through backoff cycles on first boot.
+
+START=25
+STOP=10
+
+start() {
+	[ "$(uci -q get opennds.@opennds[0].enabled)" = "1" ] || return 0
+	sleep 2
+	/etc/init.d/opennds restart
+}
+
+stop() {
+	:
+}

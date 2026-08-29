@@ -262,10 +262,7 @@ func (h *Handler) bindMAC(userID uint, mac string) {
 
 func (h *Handler) authorizeClient(w http.ResponseWriter, params *FASParams, user *database.User) {
 	h.bindMAC(user.ID, params.ClientMAC)
-
-	// Single device online: deactivate other sessions
-	h.db.Model(&database.Session{}).Where("user_id = ? AND active = ?", user.ID, true).
-		Updates(map[string]interface{}{"active": false, "ended_at": time.Now()})
+	h.openSession(params, user)
 
 	quotaC := h.computeAuthQuota(user.QuotaRemainingBytes)
 
@@ -289,6 +286,35 @@ func (h *Handler) authorizeClient(w http.ResponseWriter, params *FASParams, user
 	os.WriteFile(filepath.Join(queueDir, rhid), []byte(logLine), 0600)
 
 	h.renderSuccess(w, params)
+}
+
+// openSession records who is online where. Usage reports arrive later keyed
+// only by router and MAC, so without this row the cloud cannot attribute
+// traffic to an account. Enforcing one device per account happens here too, by
+// closing the account's other sessions.
+func (h *Handler) openSession(params *FASParams, user *database.User) {
+	now := time.Now()
+	mac := strings.ToLower(params.ClientMAC)
+
+	h.db.Model(&database.Session{}).Where("user_id = ? AND active = ?", user.ID, true).
+		Updates(map[string]any{"active": false, "ended_at": now})
+
+	var router database.Router
+	if err := h.db.Where("device_id = ?", params.GatewayName).First(&router).Error; err != nil {
+		// An unregistered gateway can still authorise clients; their traffic
+		// simply cannot be attributed until the router is registered.
+		return
+	}
+
+	h.db.Create(&database.Session{
+		SessionKey: fmt.Sprintf("%s:%s:%d", params.GatewayName, mac, now.UnixNano()),
+		UserID:     user.ID,
+		RouterID:   router.ID,
+		MAC:        mac,
+		IP:         params.ClientIP,
+		StartedAt:  now,
+		Active:     true,
+	})
 }
 
 func (h *Handler) computeAuthQuota(remaining int64) int64 {

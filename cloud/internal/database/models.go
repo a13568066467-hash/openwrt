@@ -9,6 +9,7 @@ import (
 func Migrate(db *gorm.DB) error {
 	return db.AutoMigrate(
 		&Router{},
+		&RouterCommand{},
 		&User{},
 		&UserDevice{},
 		&Session{},
@@ -34,6 +35,21 @@ type Router struct {
 	LastHeartbeat *time.Time `json:"last_heartbeat"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// RouterCommand is an instruction queued for a router to collect on its next
+// heartbeat. Routers poll rather than being pushed to, because they normally
+// sit behind NAT with no reachable inbound address.
+type RouterCommand struct {
+	ID             uint       `gorm:"primaryKey" json:"id"`
+	RouterID       uint       `gorm:"index:idx_router_pending" json:"router_id"`
+	Action         string     `gorm:"size:32" json:"action"`
+	MAC            string     `gorm:"size:17" json:"mac,omitempty"`
+	UserID         uint       `json:"user_id,omitempty"`
+	RemainingBytes int64      `json:"remaining_bytes,omitempty"`
+	Delivered      bool       `gorm:"index:idx_router_pending" json:"delivered"`
+	DeliveredAt    *time.Time `json:"delivered_at"`
+	CreatedAt      time.Time  `json:"created_at"`
 }
 
 type User struct {

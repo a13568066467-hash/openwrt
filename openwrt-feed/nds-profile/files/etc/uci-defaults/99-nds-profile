@@ -1,35 +1,55 @@
 #!/bin/sh
-# NDS Billing default profile setup
-# Runs once on first boot after package install.
-
-. /lib/functions.sh
+# First-boot configuration for the NDS billing gateway.
+#
+# Package selection happens at build time (see build/configs/*.config), so this
+# script only writes UCI. In particular it must not try to install anything:
+# OpenWrt 25.12 uses apk, and a first-boot device has no network yet anyway.
 
 CLOUD_HOST="${NDS_CLOUD_HOST:-portal.local}"
 CLOUD_PORT="${NDS_CLOUD_PORT:-8443}"
 CLOUD_PATH="${NDS_CLOUD_PATH:-/fas}"
+GUEST_SSID="${NDS_GUEST_SSID:-NDS-WiFi}"
+GUEST_SUBNET="${NDS_GUEST_SUBNET:-192.168.100.1}"
 
-# Replace dnsmasq with dnsmasq-full for nftset walled garden
-if opkg list-installed | grep -q '^dnsmasq '; then
-	opkg remove dnsmasq 2>/dev/null || true
-fi
-opkg install dnsmasq-full 2>/dev/null || true
-
-# Guest network interface
+# Guest bridge. Declared as a device section rather than the legacy
+# `option type bridge`, which is what netifd expects since OpenWrt 21.02.
 uci -q batch <<EOF
-set network.guest=interface
-set network.guest.type='bridge'
-set network.guest.proto='static'
-set network.guest.ipaddr='192.168.100.1'
-set network.guest.netmask='255.255.255.0'
-set network.guest.device='br-guest'
-set network.guest.delegate='0'
+delete network.guest_dev
+set network.guest_dev=device
+set network.guest_dev.name='br-guest'
+set network.guest_dev.type='bridge'
 
+delete network.guest
+set network.guest=interface
+set network.guest.device='br-guest'
+set network.guest.proto='static'
+set network.guest.ipaddr='${GUEST_SUBNET}'
+set network.guest.netmask='255.255.255.0'
+EOF
+
+# openNDS has no IPv6 support, so a client with a routable IPv6 address would
+# reach the internet without ever passing the portal. The guest network is
+# therefore kept IPv4-only: no prefix delegated, no RA, no DHCPv6.
+uci -q batch <<EOF
+set network.guest.delegate='0'
+set network.guest.ipv6='0'
+
+delete dhcp.guest
 set dhcp.guest=dhcp
 set dhcp.guest.interface='guest'
 set dhcp.guest.start='100'
 set dhcp.guest.limit='150'
 set dhcp.guest.leasetime='12h'
+set dhcp.guest.ra='disabled'
+set dhcp.guest.dhcpv6='disabled'
+set dhcp.guest.ndp='disabled'
+EOF
 
+# Guest zone: forwarding to WAN is what openNDS gates. Input is rejected apart
+# from the services a client must reach before it can authenticate — without
+# these rules a client never even gets a DHCP lease.
+uci -q batch <<EOF
+delete firewall.guest
 set firewall.guest=zone
 set firewall.guest.name='guest'
 set firewall.guest.network='guest'
@@ -37,24 +57,64 @@ set firewall.guest.input='REJECT'
 set firewall.guest.output='ACCEPT'
 set firewall.guest.forward='REJECT'
 
+delete firewall.guest_to_wan
 set firewall.guest_to_wan=forwarding
 set firewall.guest_to_wan.src='guest'
 set firewall.guest_to_wan.dest='wan'
 
+delete firewall.guest_dhcp
+set firewall.guest_dhcp=rule
+set firewall.guest_dhcp.name='Allow-DHCP-Guest'
+set firewall.guest_dhcp.src='guest'
+set firewall.guest_dhcp.proto='udp'
+set firewall.guest_dhcp.dest_port='67'
+set firewall.guest_dhcp.family='ipv4'
+set firewall.guest_dhcp.target='ACCEPT'
+
+delete firewall.guest_dns
+set firewall.guest_dns=rule
+set firewall.guest_dns.name='Allow-DNS-Guest'
+set firewall.guest_dns.src='guest'
+set firewall.guest_dns.proto='tcp udp'
+set firewall.guest_dns.dest_port='53'
+set firewall.guest_dns.target='ACCEPT'
+
+delete firewall.guest_portal
+set firewall.guest_portal=rule
+set firewall.guest_portal.name='Allow-openNDS-Guest'
+set firewall.guest_portal.src='guest'
+set firewall.guest_portal.proto='tcp'
+set firewall.guest_portal.dest_port='2050'
+set firewall.guest_portal.target='ACCEPT'
+EOF
+
+# Open guest SSID on the first radio when wireless hardware exists. On x86_64
+# VMs and other headless targets there is no radio; attach spare Ethernet
+# ports to br-guest instead so openNDS still has a live gateway interface.
+if ls /sys/class/ieee80211/*/ 2>/dev/null | head -1 >/dev/null; then
+	uci -q batch <<EOF
+delete wireless.guest_radio0
 set wireless.guest_radio0=wifi-iface
 set wireless.guest_radio0.device='radio0'
 set wireless.guest_radio0.mode='ap'
 set wireless.guest_radio0.network='guest'
-set wireless.guest_radio0.ssid='NDS-WiFi'
+set wireless.guest_radio0.ssid='${GUEST_SSID}'
 set wireless.guest_radio0.encryption='none'
+set wireless.guest_radio0.isolate='1'
+delete wireless.radio0.disabled
 EOF
+else
+	# Do not probe sysfs here: uci-defaults can run before the driver has
+	# registered eth1. Declaring the port in UCI is enough; netifd attaches it
+	# once the interface appears.
+	uci add_list network.guest_dev.ports='eth1'
+fi
 
-# Disable IPv6 on guest
-uci set network.guest.ipv6='0' 2>/dev/null || true
+# openNDS in FAS level 4: the portal runs in the cloud and authorises clients
+# by writing to the authmon queue, so the router never trusts client input.
+[ -n "$(uci -q get opennds.@opennds[0])" ] || uci -q add opennds opennds
 
-# openNDS FAS level 4 configuration
 uci -q batch <<EOF
-set opennds.@opennds[0]=opennds
 set opennds.@opennds[0].enabled='1'
 set opennds.@opennds[0].gatewayinterface='br-guest'
 set opennds.@opennds[0].gatewayname='NDS-Billing-Gateway'
@@ -62,37 +122,32 @@ set opennds.@opennds[0].fas_secure_enabled='4'
 set opennds.@opennds[0].fasremotefqdn='${CLOUD_HOST}'
 set opennds.@opennds[0].fasport='${CLOUD_PORT}'
 set opennds.@opennds[0].faspath='${CLOUD_PATH}'
-set opennds.@opennds[0].fas_ssl='wget'
+set opennds.@opennds[0].binauth='/usr/lib/nds-hooks/binauth.sh'
 set opennds.@opennds[0].sessiontimeout='0'
 set opennds.@opennds[0].checkinterval='5'
-set opennds.@opennds[0].nat_traversal_poll_interval='10'
-set opennds.@opennds[0].fup_upload_throttle_rate='0'
-set opennds.@opennds[0].fup_download_throttle_rate='0'
+delete opennds.@opennds[0].walledgarden_fqdn_list
 add_list opennds.@opennds[0].walledgarden_fqdn_list='${CLOUD_HOST}'
+delete opennds.@opennds[0].walledgarden_port_list
 add_list opennds.@opennds[0].walledgarden_port_list='443'
-add_list opennds.@opennds[0].walledgarden_port_list='8443'
+add_list opennds.@opennds[0].walledgarden_port_list='${CLOUD_PORT}'
 EOF
 
-# nds-agent configuration
 uci -q batch <<EOF
-set nds-agent.@main[0]=main
-set nds-agent.@main[0].enabled='1'
-set nds-agent.@main[0].cloud_url='https://${CLOUD_HOST}:${CLOUD_PORT}'
-set nds-agent.@main[0].poll_interval='5'
-set nds-agent.@main[0].report_interval='60'
-set nds-agent.@main[0].device_id=''
-set nds-agent.@main[0].device_secret=''
+set nds-agent.main.cloud_url='https://${CLOUD_HOST}:${CLOUD_PORT}'
 EOF
 
-uci commit network
-uci commit dhcp
-uci commit firewall
-uci commit wireless
-uci commit opennds
-uci commit nds-agent
+for cfg in network dhcp firewall wireless opennds nds-agent; do
+	uci -q commit "$cfg"
+done
 
-/etc/init.d/dnsmasq enable
+# openNDS ships at START=15, before network (S20). Without this change the
+# daemon starts while br-guest is still down and silently fails to bind.
+if grep -q '^START=15' /etc/init.d/opennds 2>/dev/null; then
+	sed -i 's/^START=15/START=21/' /etc/init.d/opennds
+fi
+
 /etc/init.d/opennds enable
 /etc/init.d/nds-agent enable
+/etc/init.d/nds-late enable
 
 exit 0
