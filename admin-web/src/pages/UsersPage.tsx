@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Table, Button, Modal, Form, InputNumber, Input, message, Tag } from 'antd';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { adminApi, formatMB } from '../api';
+import PageShell from '../components/PageShell';
 
 export default function UsersPage() {
   const qc = useQueryClient();
@@ -32,12 +33,12 @@ export default function UsersPage() {
   };
 
   return (
-    <div>
-      <h2 style={{ marginBottom: 16 }}>用户管理</h2>
+    <PageShell title="用户管理">
       <Table
         loading={isLoading}
         dataSource={data}
         rowKey="id"
+        pagination={{ pageSize: 10 }}
         columns={[
           { title: 'ID', dataIndex: 'id', width: 60 },
           { title: '用户名', dataIndex: 'username' },
@@ -53,16 +54,16 @@ export default function UsersPage() {
           {
             title: '状态',
             dataIndex: 'status',
-            render: (s: string) => <Tag color={s === 'active' ? 'green' : 'red'}>{s}</Tag>,
+            render: (s: string) => <Tag color={s === 'active' ? 'success' : 'error'}>{s}</Tag>,
           },
           {
             title: '操作',
             render: (_: unknown, r) => (
               <>
-                <Button size="small" onClick={() => { setQuotaModal(r.id); quotaForm.resetFields(); }}>
+                <Button size="small" type="link" onClick={() => { setQuotaModal(r.id); quotaForm.resetFields(); }}>
                   调整流量
                 </Button>
-                <Button size="small" style={{ marginLeft: 8 }} onClick={() => { setRateModal(r.id); rateForm.resetFields(); }}>
+                <Button size="small" type="link" onClick={() => { setRateModal(r.id); rateForm.resetFields(); }}>
                   调整限速
                 </Button>
               </>
@@ -92,6 +93,6 @@ export default function UsersPage() {
           </Form.Item>
         </Form>
       </Modal>
-    </div>
+    </PageShell>
   );
 }

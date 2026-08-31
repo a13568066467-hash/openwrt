@@ -1,6 +1,7 @@
 import { Table } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { adminApi } from '../api';
+import PageShell from '../components/PageShell';
 
 export default function AuditPage() {
   const { data, isLoading } = useQuery({
@@ -9,12 +10,12 @@ export default function AuditPage() {
   });
 
   return (
-    <div>
-      <h2 style={{ marginBottom: 16 }}>审计日志</h2>
+    <PageShell title="审计日志">
       <Table
         loading={isLoading}
         dataSource={data}
         rowKey="id"
+        pagination={{ pageSize: 10 }}
         columns={[
           { title: 'ID', dataIndex: 'id', width: 60 },
           { title: '操作', dataIndex: 'action' },
@@ -24,6 +25,6 @@ export default function AuditPage() {
           { title: '时间', dataIndex: 'created_at' },
         ]}
       />
-    </div>
+    </PageShell>
   );
 }

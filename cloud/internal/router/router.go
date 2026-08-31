@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/nds-billing/cloud/internal/admin"
 	"github.com/nds-billing/cloud/internal/auth"
+	"github.com/nds-billing/cloud/internal/branding"
 	"github.com/nds-billing/cloud/internal/config"
 	"github.com/nds-billing/cloud/internal/device"
 	"github.com/nds-billing/cloud/internal/fas"
@@ -63,6 +64,8 @@ func New(db *gorm.DB, cfg *config.Config) http.Handler {
 			r.Delete("/plans/{id}", adminHandler.DeletePlan)
 			r.Get("/audit-logs", adminHandler.ListAuditLogs)
 			r.Get("/usage", adminHandler.UsageReport)
+			r.Get("/branding", adminHandler.GetBranding)
+			r.Put("/branding", adminHandler.UpdateBranding)
 			r.Post("/vouchers/batch", func(w http.ResponseWriter, req *http.Request) {
 				var body struct {
 					Name      string `json:"name"`
@@ -106,6 +109,15 @@ func New(db *gorm.DB, cfg *config.Config) http.Handler {
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"status":"ok"}`))
+	})
+
+	r.Get("/api/v1/branding", func(w http.ResponseWriter, r *http.Request) {
+		cfg, err := branding.Get(db)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(cfg)
 	})
 
 	return r

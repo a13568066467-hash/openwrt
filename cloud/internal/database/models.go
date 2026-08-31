@@ -7,7 +7,7 @@ import (
 )
 
 func Migrate(db *gorm.DB) error {
-	return db.AutoMigrate(
+	if err := db.AutoMigrate(
 		&Router{},
 		&RouterCommand{},
 		&User{},
@@ -22,7 +22,11 @@ func Migrate(db *gorm.DB) error {
 		&AuditLog{},
 		&Setting{},
 		&Payment{},
-	)
+	); err != nil {
+		return err
+	}
+	// 历史套餐：用 id 作为默认排序，保证套餐一、二、三…顺序
+	return db.Exec("UPDATE plans SET sort_order = id WHERE sort_order = 0").Error
 }
 
 type Router struct {
@@ -116,6 +120,7 @@ type Plan struct {
 	PriceCents       int64     `json:"price_cents"`
 	UploadRateKbps   int       `json:"upload_rate_kbps"`
 	DownloadRateKbps int       `json:"download_rate_kbps"`
+	SortOrder        int       `gorm:"default:0" json:"sort_order"`
 	Active           bool      `gorm:"default:true" json:"active"`
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
@@ -161,7 +166,7 @@ type AuditLog struct {
 type Setting struct {
 	ID    uint   `gorm:"primaryKey" json:"id"`
 	Key   string `gorm:"uniqueIndex;size:64" json:"key"`
-	Value string `gorm:"size:512" json:"value"`
+	Value string `gorm:"type:mediumtext" json:"value"`
 }
 
 type Payment struct {

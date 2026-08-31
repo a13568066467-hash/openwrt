@@ -127,6 +127,6 @@ func (h *Handler) RedeemVoucher(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ListPlans(w http.ResponseWriter, r *http.Request) {
 	var plans []database.Plan
-	h.db.Where("active = ?", true).Find(&plans)
+	h.db.Where("active = ?", true).Order("sort_order asc, id asc").Find(&plans)
 	json.NewEncoder(w).Encode(plans)
 }

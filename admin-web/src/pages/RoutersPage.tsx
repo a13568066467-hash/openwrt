@@ -1,6 +1,7 @@
 import { Table, Tag } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { adminApi } from '../api';
+import PageShell from '../components/PageShell';
 
 export default function RoutersPage() {
   const { data, isLoading } = useQuery({
@@ -9,12 +10,12 @@ export default function RoutersPage() {
   });
 
   return (
-    <div>
-      <h2 style={{ marginBottom: 16 }}>设备管理</h2>
+    <PageShell title="设备管理">
       <Table
         loading={isLoading}
         dataSource={data}
         rowKey="id"
+        pagination={{ pageSize: 10 }}
         columns={[
           { title: 'ID', dataIndex: 'id', width: 60 },
           { title: '设备ID', dataIndex: 'device_id' },
@@ -23,12 +24,12 @@ export default function RoutersPage() {
             title: '状态',
             dataIndex: 'online',
             render: (online: boolean) => (
-              <Tag color={online ? 'green' : 'default'}>{online ? '在线' : '离线'}</Tag>
+              <Tag color={online ? 'success' : 'default'}>{online ? '在线' : '离线'}</Tag>
             ),
           },
           { title: '最后心跳', dataIndex: 'last_heartbeat' },
         ]}
       />
-    </div>
+    </PageShell>
   );
 }

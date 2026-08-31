@@ -1,6 +1,7 @@
 import { Table } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { adminApi, formatBytes } from '../api';
+import PageShell from '../components/PageShell';
 
 export default function UsagePage() {
   const { data, isLoading } = useQuery({
@@ -9,12 +10,12 @@ export default function UsagePage() {
   });
 
   return (
-    <div>
-      <h2 style={{ marginBottom: 16 }}>用量报表</h2>
+    <PageShell title="用量报表">
       <Table
         loading={isLoading}
         dataSource={data}
         rowKey="id"
+        pagination={{ pageSize: 10 }}
         columns={[
           { title: 'ID', dataIndex: 'id', width: 60 },
           { title: 'MAC', dataIndex: 'mac' },
@@ -24,6 +25,6 @@ export default function UsagePage() {
           { title: '时间', dataIndex: 'recorded_at' },
         ]}
       />
-    </div>
+    </PageShell>
   );
 }

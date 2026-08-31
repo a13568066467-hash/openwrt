@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Table, Button, Modal, Form, Input, InputNumber, message, Tag } from 'antd';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '../api';
+import PageShell from '../components/PageShell';
 
 export default function VouchersPage() {
   const qc = useQueryClient();
@@ -23,17 +24,19 @@ export default function VouchersPage() {
   };
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <h2>卡密管理</h2>
+    <PageShell
+      title="卡密管理"
+      extra={
         <Button type="primary" onClick={() => { form.resetFields(); setCodes([]); setModalOpen(true); }}>
           生成卡密批次
         </Button>
-      </div>
+      }
+    >
       <Table
         loading={isLoading}
         dataSource={data}
         rowKey="id"
+        pagination={{ pageSize: 10 }}
         columns={[
           { title: 'ID', dataIndex: 'id', width: 60 },
           { title: '批次名称', dataIndex: 'name' },
@@ -56,12 +59,12 @@ export default function VouchersPage() {
           <Form.Item name="count" label="数量" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} min={1} max={1000} /></Form.Item>
         </Form>
         {codes.length > 0 && (
-          <div style={{ marginTop: 16, maxHeight: 200, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 8 }}>
+          <div className="codes-panel">
             <Tag color="orange">请立即保存，卡密仅显示一次</Tag>
-            {codes.map(c => <div key={c} style={{ fontFamily: 'monospace' }}>{c}</div>)}
+            {codes.map(c => <div key={c} className="codes-panel__code">{c}</div>)}
           </div>
         )}
       </Modal>
-    </div>
+    </PageShell>
   );
 }

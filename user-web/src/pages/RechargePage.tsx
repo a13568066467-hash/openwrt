@@ -1,17 +1,31 @@
 import { useState } from 'react';
-import { Form, Input, Button, Toast, Card } from 'antd-mobile';
-import { useQueryClient } from '@tanstack/react-query';
+import { Toast } from 'antd-mobile';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { userApi, formatBytes } from '../api';
+import { PageHero, PageLoading, SectionTitle, StepGuide } from '../components/PageShell';
+import { RechargeTabIcon } from '../components/icons/TabBarIcons';
 
 export default function RechargePage() {
   const qc = useQueryClient();
+  const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleRedeem = async (values: { code: string }) => {
+  const { data: user, isLoading } = useQuery({
+    queryKey: ['profile'],
+    queryFn: () => userApi.getProfile().then(r => r.data),
+  });
+
+  const handleRedeem = async () => {
+    const trimmed = code.trim();
+    if (!trimmed) {
+      Toast.show({ content: '请输入卡密' });
+      return;
+    }
     setLoading(true);
     try {
-      const { data } = await userApi.redeemVoucher(values.code.trim());
+      const { data } = await userApi.redeemVoucher(trimmed);
       Toast.show({ icon: 'success', content: `充值成功！余额 ${formatBytes(data.balance_bytes)}` });
+      setCode('');
       qc.invalidateQueries({ queryKey: ['profile'] });
     } catch {
       Toast.show({ icon: 'fail', content: '卡密无效或已使用' });
@@ -20,22 +34,62 @@ export default function RechargePage() {
     }
   };
 
+  if (isLoading) return <PageLoading />;
+
   return (
-    <div style={{ padding: 16 }}>
-      <Card title="卡密充值">
-        <p style={{ color: '#999', marginBottom: 16, fontSize: 14 }}>
-          请输入购买的卡密进行充值，每个卡密仅可使用一次
-        </p>
-        <Form onFinish={handleRedeem} footer={
-          <Button block type="submit" color="primary" loading={loading} size="large">
-            立即充值
-          </Button>
-        }>
-          <Form.Item name="code" rules={[{ required: true, message: '请输入卡密' }]}>
-            <Input placeholder="请输入卡密" style={{ fontFamily: 'monospace', fontSize: 18, letterSpacing: 2 }} />
-          </Form.Item>
-        </Form>
-      </Card>
+    <div className="page page--recharge">
+      <PageHero
+        variant="recharge"
+        title="卡密充值"
+        subtitle="输入卡密，流量即时到账"
+        icon={<RechargeTabIcon size={40} color="#fff" />}
+        extra={
+          <div className="balance-pill">
+            <span className="balance-pill__label">当前余额</span>
+            <span className="balance-pill__value">{formatBytes(user?.quota_remaining_bytes ?? 0)}</span>
+          </div>
+        }
+      />
+
+      <div className="page-body">
+        <div className="recharge-card">
+          <SectionTitle>输入卡密</SectionTitle>
+          <p className="recharge-card__hint">每个卡密仅可使用一次，请核对后提交</p>
+
+          <div className="voucher-input-wrap">
+            <input
+              className="voucher-input"
+              value={code}
+              onChange={e => setCode(e.target.value.toUpperCase())}
+              placeholder="XXXX-XXXX-XXXX-XXXX"
+              maxLength={32}
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <div className="voucher-input__glow" aria-hidden />
+          </div>
+
+          <button
+            type="button"
+            className="btn-gradient"
+            disabled={loading || !code.trim()}
+            onClick={handleRedeem}
+          >
+            {loading ? '充值中…' : '立即充值'}
+          </button>
+        </div>
+
+        <div className="surface-card surface-card--soft">
+          <SectionTitle>充值流程</SectionTitle>
+          <StepGuide
+            steps={[
+              { num: '1', title: '购买卡密', desc: '在套餐页选择方案并获取卡密' },
+              { num: '2', title: '输入兑换', desc: '将卡密粘贴到上方输入框' },
+              { num: '3', title: '即刻上网', desc: '流量到账后即可连接 WiFi 使用' },
+            ]}
+          />
+        </div>
+      </div>
     </div>
   );
 }

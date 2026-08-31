@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { Form, Input, Button, Card, message } from 'antd';
+import { Form, Input, Button, message } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { adminApi } from '../api';
+import { useBranding } from '../hooks/useBranding';
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { data: branding } = useBranding(false);
 
   const onFinish = async (values: { username: string; password: string }) => {
     setLoading(true);
@@ -22,20 +24,24 @@ export default function LoginPage() {
   };
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: '#f0f2f5' }}>
-      <Card title="NDS 管理面板" style={{ width: 400 }}>
-        <Form onFinish={onFinish} layout="vertical">
+    <div className="app-bg login-page">
+      <div className="login-card">
+        {branding?.admin_logo && (
+          <img src={branding.admin_logo} alt="" className="login-card__logo" />
+        )}
+        <h1 className="login-card__title">{branding?.login_title || 'NDS 管理面板'}</h1>
+        <Form onFinish={onFinish} layout="vertical" size="large">
           <Form.Item name="username" label="用户名" rules={[{ required: true }]}>
-            <Input />
+            <Input placeholder="请输入用户名" />
           </Form.Item>
           <Form.Item name="password" label="密码" rules={[{ required: true }]}>
-            <Input.Password />
+            <Input.Password placeholder="请输入密码" />
           </Form.Item>
           <Button type="primary" htmlType="submit" loading={loading} block>
             登录
           </Button>
         </Form>
-      </Card>
+      </div>
     </div>
   );
 }

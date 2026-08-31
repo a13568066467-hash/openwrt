@@ -2,11 +2,13 @@ package admin
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/nds-billing/cloud/internal/auth"
+	"github.com/nds-billing/cloud/internal/branding"
 	"github.com/nds-billing/cloud/internal/database"
 	"github.com/nds-billing/cloud/internal/ledger"
 	"golang.org/x/crypto/bcrypt"
@@ -82,6 +84,34 @@ func (h *Handler) AdjustQuota(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{"balance_bytes": balance, "type": ledgerType})
 }
 
+func (h *Handler) GetBranding(w http.ResponseWriter, r *http.Request) {
+	cfg, err := branding.Get(h.db)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(cfg)
+}
+
+func (h *Handler) UpdateBranding(w http.ResponseWriter, r *http.Request) {
+	var cfg branding.Config
+	if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+	if err := branding.Save(h.db, cfg); err != nil {
+		if errors.Is(err, branding.ErrLogoTooLarge) || errors.Is(err, branding.ErrInvalidImage) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	adminID := auth.GetAdminID(r.Context())
+	h.audit(adminID, "update_branding", "setting", 0, "")
+	json.NewEncoder(w).Encode(cfg)
+}
+
 // pushQuota tells the routers a user is currently online through to adopt a new
 // balance. Without it the router keeps enforcing its cached figure until the
 // next report, so a top-up would not restore service for up to a minute.
@@ -147,13 +177,18 @@ func (h *Handler) UpdateUserRate(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ListPlans(w http.ResponseWriter, r *http.Request) {
 	var plans []database.Plan
-	h.db.Find(&plans)
+	h.db.Order("sort_order asc, id asc").Find(&plans)
 	json.NewEncoder(w).Encode(plans)
 }
 
 func (h *Handler) CreatePlan(w http.ResponseWriter, r *http.Request) {
 	var plan database.Plan
 	json.NewDecoder(r.Body).Decode(&plan)
+	if plan.SortOrder <= 0 {
+		var maxSort int
+		h.db.Model(&database.Plan{}).Select("COALESCE(MAX(sort_order), 0)").Scan(&maxSort)
+		plan.SortOrder = maxSort + 1
+	}
 	h.db.Create(&plan)
 	json.NewEncoder(w).Encode(plan)
 }

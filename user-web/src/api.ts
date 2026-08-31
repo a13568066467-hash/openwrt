@@ -24,6 +24,9 @@ export interface Plan {
   name: string;
   traffic_mb: number;
   price_cents: number;
+  upload_rate_kbps?: number;
+  download_rate_kbps?: number;
+  sort_order?: number;
 }
 
 export interface UserDevice {
@@ -61,4 +64,41 @@ export function formatBytes(bytes: number): string {
 
 export function formatMB(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(0)}`;
+}
+
+export function formatTrafficMB(mb: number): string {
+  if (mb >= 1024) {
+    const gb = mb / 1024;
+    return Number.isInteger(gb) ? `${gb} GB` : `${gb.toFixed(1)} GB`;
+  }
+  return `${mb} MB`;
+}
+
+export function formatSpeed(kbps: number): string {
+  if (!kbps) return '不限速';
+  if (kbps >= 1024) return `${(kbps / 1024).toFixed(0)} Mbps`;
+  return `${kbps} Kbps`;
+}
+
+export function formatRecordTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+export function formatRecordDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  if (d.toDateString() === today.toDateString()) return '今天';
+  if (d.toDateString() === yesterday.toDateString()) return '昨天';
+  return d.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' });
 }

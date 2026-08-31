@@ -7,6 +7,7 @@ import PlansPage from './pages/PlansPage';
 import VouchersPage from './pages/VouchersPage';
 import UsagePage from './pages/UsagePage';
 import AuditPage from './pages/AuditPage';
+import BrandingPage from './pages/BrandingPage';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('admin_token');
@@ -26,6 +27,7 @@ export default function App() {
           <Route path="vouchers" element={<VouchersPage />} />
           <Route path="usage" element={<UsagePage />} />
           <Route path="audit" element={<AuditPage />} />
+          <Route path="branding" element={<BrandingPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

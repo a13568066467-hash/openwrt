@@ -35,6 +35,7 @@ export interface Plan {
   price_cents: number;
   upload_rate_kbps: number;
   download_rate_kbps: number;
+  sort_order: number;
   active: boolean;
 }
 
@@ -64,6 +65,13 @@ export interface UsageRecord {
   recorded_at: string;
 }
 
+export interface BrandingConfig {
+  site_title: string;
+  login_title: string;
+  admin_logo: string;
+  user_logo: string;
+}
+
 export const adminApi = {
   login: (username: string, password: string) =>
     api.post<{ token: string }>('/admin/login', { username, password }),
@@ -82,6 +90,12 @@ export const adminApi = {
     api.post<{ batch_id: number; codes: string[] }>('/admin/vouchers/batch', { name, traffic_mb, count }),
   getAuditLogs: () => api.get<AuditLog[]>('/admin/audit-logs'),
   getUsage: () => api.get<UsageRecord[]>('/admin/usage'),
+  getBranding: () => api.get<BrandingConfig>('/admin/branding'),
+  updateBranding: (config: BrandingConfig) => api.put<BrandingConfig>('/admin/branding', config),
+};
+
+export const publicApi = {
+  getBranding: () => api.get<BrandingConfig>('/branding'),
 };
 
 export function formatBytes(bytes: number): string {
