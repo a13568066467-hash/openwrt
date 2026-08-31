@@ -174,10 +174,27 @@ func (s *Service) Redeem(code string, userID uint) (int64, error) {
 	return balance, nil
 }
 
-func (s *Service) ListBatches() ([]database.VoucherBatch, error) {
+func (s *Service) ListBatches() ([]BatchListItem, error) {
 	var batches []database.VoucherBatch
-	err := s.db.Order("id desc").Find(&batches).Error
-	return batches, err
+	if err := s.db.Order("id desc").Find(&batches).Error; err != nil {
+		return nil, err
+	}
+	items := make([]BatchListItem, len(batches))
+	for i, b := range batches {
+		items[i].VoucherBatch = b
+		if b.Count == 1 && b.CodesJSON != "" {
+			var codes []string
+			if json.Unmarshal([]byte(b.CodesJSON), &codes) == nil && len(codes) > 0 {
+				items[i].Code = codes[0]
+			}
+		}
+	}
+	return items, nil
+}
+
+type BatchListItem struct {
+	database.VoucherBatch
+	Code string `json:"code,omitempty"`
 }
 
 func (s *Service) ListByBatch(batchID uint) ([]database.Voucher, error) {

@@ -46,6 +46,7 @@ export interface VoucherBatch {
   count: number;
   valid_days: number;
   created_at: string;
+  code?: string;
 }
 
 export interface VoucherBatchDetail {

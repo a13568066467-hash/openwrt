@@ -107,13 +107,32 @@ export default function VouchersPage() {
           },
           {
             title: '操作',
-            width: 100,
-            render: (_: unknown, r: VoucherBatch) =>
-              r.count > 2 ? (
-                <Button type="link" size="small" onClick={() => openDetail(r)}>
-                  详情
-                </Button>
-              ) : null,
+            width: 240,
+            render: (_: unknown, r: VoucherBatch) => {
+              if (r.count === 1 && r.code) {
+                return (
+                  <Tooltip title="点击复制">
+                    <span
+                      className="voucher-inline-code"
+                      onClick={() => copyCodes([r.code!])}
+                      role="button"
+                      tabIndex={0}
+                    >
+                      {r.code}
+                      <CopyOutlined className="voucher-inline-code__icon" />
+                    </span>
+                  </Tooltip>
+                );
+              }
+              if (r.count > 2) {
+                return (
+                  <Button type="link" size="small" onClick={() => openDetail(r)}>
+                    详情
+                  </Button>
+                );
+              }
+              return null;
+            },
           },
         ]}
       />
