@@ -4,10 +4,17 @@
 
 ```bash
 cd cloud
-docker compose up -d
 cp .env.example .env
-go run ./cmd/seed    # 创建默认管理员 admin/admin123
+docker compose up -d     # MySQL :3307, Redis :6380（映射端口，避免与本机冲突）
+go run ./cmd/seed        # 创建默认管理员 admin/admin123
 go run ./cmd/server
+```
+
+首次使用 Docker 前可预先拉取镜像：
+
+```bash
+docker pull mysql:8.0
+docker pull redis:7-alpine
 ```
 
 ## 前端部署

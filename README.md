@@ -32,8 +32,16 @@ bash /mnt/d/Users/Documents/project/openwrt/build/build.sh x86_64
 
 ```bash
 cd cloud
+cp .env.example .env   # 首次：MySQL 3307、Redis 6380（Docker 映射端口）
 docker compose up -d
+go run ./cmd/seed        # 首次：创建默认管理员 admin/admin123
 go run ./cmd/server
+```
+
+Windows 一键启动（需先启动 Docker Desktop）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\start-dev.ps1
 ```
 
 ### 4. 管理面板 / 用户端
