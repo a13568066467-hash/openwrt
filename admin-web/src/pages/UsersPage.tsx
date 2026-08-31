@@ -1,8 +1,14 @@
 import { useState } from 'react';
 import { Table, Button, Modal, Form, InputNumber, Input, message, Tag } from 'antd';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { adminApi, formatMB } from '../api';
+import { adminApi, formatTraffic } from '../api';
 import PageShell from '../components/PageShell';
+
+const STATUS_MAP: Record<string, { label: string; color: 'success' | 'error' | 'warning' | 'default' }> = {
+  active: { label: '正常', color: 'success' },
+  suspended: { label: '已停用', color: 'error' },
+  expired: { label: '已过期', color: 'warning' },
+};
 
 export default function UsersPage() {
   const qc = useQueryClient();
@@ -45,7 +51,7 @@ export default function UsersPage() {
           {
             title: '剩余流量',
             dataIndex: 'quota_remaining_bytes',
-            render: (v: number) => formatMB(v),
+            render: (v: number) => formatTraffic(v),
           },
           {
             title: '限速',
@@ -54,7 +60,10 @@ export default function UsersPage() {
           {
             title: '状态',
             dataIndex: 'status',
-            render: (s: string) => <Tag color={s === 'active' ? 'success' : 'error'}>{s}</Tag>,
+            render: (s: string) => {
+              const info = STATUS_MAP[s] ?? { label: s, color: 'default' as const };
+              return <Tag color={info.color}>{info.label}</Tag>;
+            },
           },
           {
             title: '操作',

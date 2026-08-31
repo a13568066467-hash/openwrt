@@ -44,7 +44,14 @@ export interface VoucherBatch {
   name: string;
   traffic_mb: number;
   count: number;
+  valid_days: number;
   created_at: string;
+}
+
+export interface VoucherBatchDetail {
+  batch: VoucherBatch;
+  codes: string[];
+  vouchers: { id: number; status: string; redeemed_by?: number; redeemed_at?: string }[];
 }
 
 export interface AuditLog {
@@ -52,6 +59,7 @@ export interface AuditLog {
   action: string;
   target_type: string;
   target_id: number;
+  target_label?: string;
   detail: string;
   created_at: string;
 }
@@ -86,8 +94,9 @@ export const adminApi = {
   updatePlan: (id: number, plan: Partial<Plan>) => api.put(`/admin/plans/${id}`, plan),
   deletePlan: (id: number) => api.delete(`/admin/plans/${id}`),
   getVoucherBatches: () => api.get<VoucherBatch[]>('/admin/vouchers/batches'),
-  createVoucherBatch: (name: string, traffic_mb: number, count: number) =>
-    api.post<{ batch_id: number; codes: string[] }>('/admin/vouchers/batch', { name, traffic_mb, count }),
+  createVoucherBatch: (name: string, traffic_mb: number, count: number, valid_days: number) =>
+    api.post<{ batch_id: number; codes: string[] }>('/admin/vouchers/batch', { name, traffic_mb, count, valid_days }),
+  getVoucherBatchDetail: (id: number) => api.get<VoucherBatchDetail>(`/admin/vouchers/batch/${id}`),
   getAuditLogs: () => api.get<AuditLog[]>('/admin/audit-logs'),
   getUsage: () => api.get<UsageRecord[]>('/admin/usage'),
   getBranding: () => api.get<BrandingConfig>('/admin/branding'),
@@ -105,6 +114,23 @@ export function formatBytes(bytes: number): string {
   return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
 
+export function formatTraffic(bytes: number): string {
+  const mb = bytes / 1024 / 1024;
+  if (mb >= 1024) {
+    const gb = mb / 1024;
+    return Number.isInteger(gb) ? `${gb} GB` : `${gb.toFixed(1)} GB`;
+  }
+  return `${mb % 1 === 0 ? mb.toFixed(0) : mb.toFixed(1)} MB`;
+}
+
+export function formatTrafficMB(mb: number): string {
+  if (mb >= 1024) {
+    const gb = mb / 1024;
+    return Number.isInteger(gb) ? `${gb} GB` : `${gb.toFixed(1)} GB`;
+  }
+  return `${mb} MB`;
+}
+
 export function formatMB(bytes: number): string {
-  return `${(bytes / 1024 / 1024).toFixed(0)} MB`;
+  return formatTraffic(bytes);
 }

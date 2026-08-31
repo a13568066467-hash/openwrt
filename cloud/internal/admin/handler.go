@@ -210,7 +210,37 @@ func (h *Handler) DeletePlan(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 	var logs []database.AuditLog
 	h.db.Order("id desc").Limit(200).Find(&logs)
-	json.NewEncoder(w).Encode(logs)
+
+	userIDs := make([]uint, 0)
+	for _, l := range logs {
+		if l.TargetType == "user" && l.TargetID > 0 {
+			userIDs = append(userIDs, l.TargetID)
+		}
+	}
+
+	usernames := map[uint]string{}
+	if len(userIDs) > 0 {
+		var users []database.User
+		h.db.Where("id IN ?", userIDs).Find(&users)
+		for _, u := range users {
+			usernames[u.ID] = u.Username
+		}
+	}
+
+	type auditLogRow struct {
+		database.AuditLog
+		TargetLabel string `json:"target_label"`
+	}
+	rows := make([]auditLogRow, len(logs))
+	for i, l := range logs {
+		rows[i].AuditLog = l
+		if l.TargetType == "user" {
+			if name, ok := usernames[l.TargetID]; ok {
+				rows[i].TargetLabel = name
+			}
+		}
+	}
+	json.NewEncoder(w).Encode(rows)
 }
 
 func (h *Handler) UsageReport(w http.ResponseWriter, r *http.Request) {

@@ -2,7 +2,7 @@ import { Dialog } from 'antd-mobile';
 import type { CSSProperties } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { userApi, formatBytes, formatSpeed } from '../api';
+import { userApi, formatTraffic, formatSpeed } from '../api';
 import { PageHero, PageLoading, SectionTitle } from '../components/PageShell';
 import {
   HomeTabIcon,
@@ -129,7 +129,7 @@ export default function HomePage() {
         extra={
           <div className="hero-stats">
             <div className="hero-stat">
-              <span className="hero-stat__value">{formatBytes(remaining)}</span>
+              <span className="hero-stat__value">{formatTraffic(remaining)}</span>
               <span className="hero-stat__label">可用流量</span>
             </div>
             <div className="hero-stat__divider" />
@@ -143,7 +143,7 @@ export default function HomePage() {
 
       <div className="page-body page-body--with-tab">
         <div className="quota-card surface-card">
-          <QuotaRing percent={percent} label={formatBytes(remaining)} />
+          <QuotaRing percent={percent} label={formatTraffic(remaining)} />
           <div className="quota-card__speeds">
             <span className="quota-speed quota-speed--up">
               ↑ {formatSpeed(user?.upload_rate_kbps ?? 0)}

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/csv"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -54,26 +55,43 @@ type CreateBatchResult struct {
 	Codes   []string `json:"codes"`
 }
 
-func (s *Service) CreateBatch(name string, trafficMB int64, count int, adminID uint) (*CreateBatchResult, error) {
+func (s *Service) CreateBatch(name string, trafficMB int64, count int, validDays int, adminID uint) (*CreateBatchResult, error) {
+	if validDays <= 0 {
+		validDays = 90
+	}
 	batch := database.VoucherBatch{
 		Name:      name,
 		TrafficMB: trafficMB,
 		Count:     count,
+		ValidDays: validDays,
 		CreatedBy: adminID,
 	}
+
+	result := &CreateBatchResult{}
+	codes := make([]string, 0, count)
+	for i := 0; i < count; i++ {
+		code := generateCode()
+		codes = append(codes, code)
+	}
+
+	codesJSON, err := json.Marshal(codes)
+	if err != nil {
+		return nil, err
+	}
+	batch.CodesJSON = string(codesJSON)
+
 	if err := s.db.Create(&batch).Error; err != nil {
 		return nil, err
 	}
 
-	result := &CreateBatchResult{BatchID: batch.ID}
-	for i := 0; i < count; i++ {
-		code := generateCode()
+	result.BatchID = batch.ID
+	result.Codes = codes
+	for _, code := range codes {
 		s.db.Create(&database.Voucher{
 			BatchID:  batch.ID,
 			CodeHash: hashCode(code),
 			Status:   "unused",
 		})
-		result.Codes = append(result.Codes, code)
 	}
 	return result, nil
 }
@@ -133,7 +151,22 @@ func (s *Service) Redeem(code string, userID uint) (int64, error) {
 		amountBytes := batch.TrafficMB * 1024 * 1024
 		var err error
 		balance, err = s.ledger.ChangeQuota(tx, userID, amountBytes, "topup", fmt.Sprintf("voucher:%d", voucher.ID), "卡密充值", nil)
-		return err
+		if err != nil {
+			return err
+		}
+
+		if batch.ValidDays > 0 {
+			var user database.User
+			if err := tx.First(&user, userID).Error; err != nil {
+				return err
+			}
+			expires := now.AddDate(0, 0, batch.ValidDays)
+			if user.QuotaExpiresAt != nil && user.QuotaExpiresAt.After(now) {
+				expires = user.QuotaExpiresAt.AddDate(0, 0, batch.ValidDays)
+			}
+			return tx.Model(&user).Update("quota_expires_at", expires).Error
+		}
+		return nil
 	})
 	if err != nil {
 		return 0, err
@@ -151,6 +184,28 @@ func (s *Service) ListByBatch(batchID uint) ([]database.Voucher, error) {
 	var vouchers []database.Voucher
 	err := s.db.Where("batch_id = ?", batchID).Find(&vouchers).Error
 	return vouchers, err
+}
+
+type BatchDetail struct {
+	Batch    database.VoucherBatch `json:"batch"`
+	Codes    []string              `json:"codes"`
+	Vouchers []database.Voucher    `json:"vouchers"`
+}
+
+func (s *Service) GetBatchDetail(batchID uint) (*BatchDetail, error) {
+	var batch database.VoucherBatch
+	if err := s.db.First(&batch, batchID).Error; err != nil {
+		return nil, err
+	}
+	vouchers, err := s.ListByBatch(batchID)
+	if err != nil {
+		return nil, err
+	}
+	codes := []string{}
+	if batch.CodesJSON != "" {
+		_ = json.Unmarshal([]byte(batch.CodesJSON), &codes)
+	}
+	return &BatchDetail{Batch: batch, Codes: codes, Vouchers: vouchers}, nil
 }
 
 type RedeemedRecord struct {

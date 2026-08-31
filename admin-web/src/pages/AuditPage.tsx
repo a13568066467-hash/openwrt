@@ -38,8 +38,13 @@ export default function AuditPage() {
           },
           {
             title: '目标类型',
-            dataIndex: 'target_type',
-            render: (v: string) => TARGET_LABELS[v] ?? v,
+            render: (_: unknown, r: { target_type: string; target_label?: string }) => {
+              const typeLabel = TARGET_LABELS[r.target_type] ?? r.target_type;
+              if (r.target_type === 'user' && r.target_label) {
+                return `用户（${r.target_label}）`;
+              }
+              return typeLabel;
+            },
           },
           { title: '目标ID', dataIndex: 'target_id' },
           { title: '详情', dataIndex: 'detail', ellipsis: true },

@@ -353,9 +353,99 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.7);
 }
 
+.codes-panel--modal {
+  max-height: 240px;
+  background: linear-gradient(135deg, #f0f7ff 0%, #f8fbff 100%);
+  border: 1px solid #d6e8ff;
+}
+
 .codes-panel__code {
   font-family: 'SF Mono', 'Cascadia Code', monospace;
   font-size: 13px;
-  padding: 2px 0;
+  padding: 4px 0;
   color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.codes-panel__index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: rgba(22, 119, 255, 0.1);
+  color: #1677ff;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.voucher-modal .ant-modal-content {
+  border-radius: 16px;
+  overflow: hidden;
+  padding: 0;
+}
+
+.voucher-modal .ant-modal-body {
+  padding: 24px;
+}
+
+.voucher-modal .ant-modal-footer {
+  padding: 12px 24px 20px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.voucher-modal__header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.voucher-modal__icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #1677ff 0%, #69b1ff 100%);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.voucher-modal__row {
+  display: flex;
+  gap: 16px;
+}
+
+.voucher-modal__result {
+  margin-top: 8px;
+}
+
+.voucher-modal__result-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.voucher-detail__meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.voucher-detail__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #eef2f6;
 }

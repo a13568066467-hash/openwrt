@@ -74,6 +74,15 @@ export function formatMB(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(0)}`;
 }
 
+export function formatTraffic(bytes: number): string {
+  const mb = bytes / 1024 / 1024;
+  if (mb >= 1024) {
+    const gb = mb / 1024;
+    return Number.isInteger(gb) ? `${gb} GB` : `${gb.toFixed(1)} GB`;
+  }
+  return `${mb % 1 === 0 ? mb.toFixed(0) : mb.toFixed(1)} MB`;
+}
+
 export function formatTrafficMB(mb: number): string {
   if (mb >= 1024) {
     const gb = mb / 1024;

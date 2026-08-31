@@ -131,6 +131,8 @@ type VoucherBatch struct {
 	Name        string    `gorm:"size:128" json:"name"`
 	TrafficMB   int64     `json:"traffic_mb"`
 	Count       int       `json:"count"`
+	ValidDays   int       `gorm:"default:90" json:"valid_days"`
+	CodesJSON   string    `gorm:"type:mediumtext" json:"-"`
 	CreatedBy   uint      `json:"created_by"`
 	CreatedAt   time.Time `json:"created_at"`
 }

@@ -71,10 +71,11 @@ func New(db *gorm.DB, cfg *config.Config) http.Handler {
 					Name      string `json:"name"`
 					TrafficMB int64  `json:"traffic_mb"`
 					Count     int    `json:"count"`
+					ValidDays int    `json:"valid_days"`
 				}
 				json.NewDecoder(req.Body).Decode(&body)
 				adminID := auth.GetAdminID(req.Context())
-				result, err := voucherSvc.CreateBatch(body.Name, body.TrafficMB, body.Count, adminID)
+				result, err := voucherSvc.CreateBatch(body.Name, body.TrafficMB, body.Count, body.ValidDays, adminID)
 				if err != nil {
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
@@ -87,8 +88,12 @@ func New(db *gorm.DB, cfg *config.Config) http.Handler {
 			})
 			r.Get("/vouchers/batch/{id}", func(w http.ResponseWriter, req *http.Request) {
 				id, _ := strconv.ParseUint(chi.URLParam(req, "id"), 10, 64)
-				vouchers, _ := voucherSvc.ListByBatch(uint(id))
-				json.NewEncoder(w).Encode(vouchers)
+				detail, err := voucherSvc.GetBatchDetail(uint(id))
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusNotFound)
+					return
+				}
+				json.NewEncoder(w).Encode(detail)
 			})
 		})
 	})
