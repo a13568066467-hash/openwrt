@@ -110,6 +110,16 @@ func (h *Handler) GetUsage(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(records)
 }
 
+func (h *Handler) ListRedeemedVouchers(w http.ResponseWriter, r *http.Request) {
+	userID := auth.GetUserID(r.Context())
+	records, err := h.voucher.ListRedeemedByUser(userID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(records)
+}
+
 func (h *Handler) RedeemVoucher(w http.ResponseWriter, r *http.Request) {
 	userID := auth.GetUserID(r.Context())
 	var req struct {

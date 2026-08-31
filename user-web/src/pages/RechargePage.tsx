@@ -16,19 +16,26 @@ export default function RechargePage() {
   });
 
   const handleRedeem = async () => {
-    const trimmed = code.trim();
-    if (!trimmed) {
+    // 后端生成 16 位小写 hex；统一去掉空格/连字符并转小写，避免大小写导致校验失败
+    const normalized = code.replace(/[\s-]/g, '').toLowerCase();
+    if (!normalized) {
       Toast.show({ content: '请输入卡密' });
       return;
     }
     setLoading(true);
     try {
-      const { data } = await userApi.redeemVoucher(trimmed);
+      const { data } = await userApi.redeemVoucher(normalized);
       Toast.show({ icon: 'success', content: `充值成功！余额 ${formatBytes(data.balance_bytes)}` });
       setCode('');
       qc.invalidateQueries({ queryKey: ['profile'] });
-    } catch {
-      Toast.show({ icon: 'fail', content: '卡密无效或已使用' });
+      qc.invalidateQueries({ queryKey: ['redeemed-vouchers'] });
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: string } })?.response?.data;
+      const text = typeof msg === 'string' ? msg : '';
+      Toast.show({
+        icon: 'fail',
+        content: text.includes('already used') ? '卡密已被使用' : '卡密无效，请核对后重试',
+      });
     } finally {
       setLoading(false);
     }
@@ -60,8 +67,8 @@ export default function RechargePage() {
             <input
               className="voucher-input"
               value={code}
-              onChange={e => setCode(e.target.value.toUpperCase())}
-              placeholder="XXXX-XXXX-XXXX-XXXX"
+              onChange={e => setCode(e.target.value.replace(/[^0-9a-fA-F\s-]/g, '').toLowerCase())}
+              placeholder="粘贴 16 位卡密"
               maxLength={32}
               autoComplete="off"
               spellCheck={false}

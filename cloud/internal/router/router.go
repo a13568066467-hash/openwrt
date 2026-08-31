@@ -102,6 +102,7 @@ func New(db *gorm.DB, cfg *config.Config) http.Handler {
 			r.Get("/profile", userHandler.GetProfile)
 			r.Get("/devices", userHandler.GetDevices)
 			r.Get("/usage", userHandler.GetUsage)
+			r.Get("/redeemed-vouchers", userHandler.ListRedeemedVouchers)
 			r.Post("/redeem", userHandler.RedeemVoucher)
 			r.Get("/plans", userHandler.ListPlans)
 		})

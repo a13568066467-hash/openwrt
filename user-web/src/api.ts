@@ -43,6 +43,13 @@ export interface UsageRecord {
   recorded_at: string;
 }
 
+export interface RedeemedVoucher {
+  id: number;
+  batch_name: string;
+  traffic_mb: number;
+  redeemed_at: string | null;
+}
+
 export const userApi = {
   login: (username: string, password: string) =>
     api.post<{ token: string; user: User }>('/user/login', { username, password }),
@@ -51,6 +58,7 @@ export const userApi = {
   getProfile: () => api.get<User>('/user/profile'),
   getDevices: () => api.get<UserDevice[]>('/user/devices'),
   getUsage: () => api.get<UsageRecord[]>('/user/usage'),
+  getRedeemedVouchers: () => api.get<RedeemedVoucher[]>('/user/redeemed-vouchers'),
   redeemVoucher: (code: string) =>
     api.post<{ balance_bytes: number }>('/user/redeem', { code }),
   getPlans: () => api.get<Plan[]>('/user/plans'),

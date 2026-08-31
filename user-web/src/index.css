@@ -750,6 +750,15 @@ body {
 .usage-item__title { display: block; font-size: 14px; font-weight: 600; color: var(--text); }
 .usage-item__time { display: block; font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 .usage-item__amount { flex-shrink: 0; font-size: 15px; font-weight: 800; color: #ff4d4f; }
+.usage-item__amount--gain { color: #00b894; }
+.usage-item__icon--gain {
+  background: linear-gradient(135deg, #e8f8f0, #d4f5e9);
+  color: #00b894;
+}
+.usage-item__dot--gain {
+  background: linear-gradient(135deg, #00b894, #1296db);
+}
+.timeline__date-total--gain { color: #00b894; }
 
 /* Empty state */
 .empty-state { text-align: center; padding: 16px 8px 8px; }
