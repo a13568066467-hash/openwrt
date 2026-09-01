@@ -8,8 +8,41 @@
 START=25
 STOP=10
 
+has_wifi_radio() {
+	ls /sys/class/ieee80211/*/ >/dev/null 2>&1
+}
+
+guest_has_eth1_port() {
+	local ports
+	ports=$(uci -q get network.guest_dev.ports 2>/dev/null) || return 1
+	echo "$ports" | grep -qw eth1
+}
+
+ensure_guest_bridge() {
+	# Headless: eth1 must be a bridge port (QEMU x86 has no WiFi radio).
+	if ! has_wifi_radio && [ -d /sys/class/net/eth1 ] && ! guest_has_eth1_port; then
+		uci add_list network.guest_dev.ports='eth1'
+		uci commit network
+		/etc/init.d/network reload
+		sleep 3
+	fi
+
+	# uci-defaults can finish before netifd creates br-guest on first boot.
+	if ! ip link show br-guest >/dev/null 2>&1; then
+		/etc/init.d/network reload
+		sleep 3
+	fi
+
+	if ip link show br-guest >/dev/null 2>&1 && \
+	   ! ip -4 addr show br-guest 2>/dev/null | grep -q 'inet '; then
+		ifup guest 2>/dev/null
+		sleep 2
+	fi
+}
+
 start() {
 	[ "$(uci -q get opennds.@opennds[0].enabled)" = "1" ] || return 0
+	ensure_guest_bridge
 	sleep 2
 	/etc/init.d/opennds restart
 }

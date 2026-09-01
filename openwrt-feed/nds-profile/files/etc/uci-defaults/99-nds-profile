@@ -91,7 +91,9 @@ EOF
 # Open guest SSID on the first radio when wireless hardware exists. On x86_64
 # VMs and other headless targets there is no radio; attach spare Ethernet
 # ports to br-guest instead so openNDS still has a live gateway interface.
-if ls /sys/class/ieee80211/*/ 2>/dev/null | head -1 >/dev/null; then
+# Do not pipe ls through head: head exits 0 on empty input, so headless targets
+# would incorrectly take the WiFi branch and never attach eth1 to br-guest.
+if ls /sys/class/ieee80211/*/ >/dev/null 2>&1; then
 	uci -q batch <<EOF
 delete wireless.guest_radio0
 set wireless.guest_radio0=wifi-iface

@@ -1,7 +1,7 @@
 # 本地开发环境一键启动（Windows PowerShell）
 # 前置：先启动 Docker Desktop，并确保 mysql:8.0 / redis:7-alpine 镜像可拉取
 $ErrorActionPreference = "Stop"
-$Root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $Cloud = Join-Path $Root "cloud"
 $EnvFile = Join-Path $Cloud ".env"
 

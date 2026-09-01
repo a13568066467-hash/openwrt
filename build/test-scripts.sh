@@ -24,7 +24,20 @@ check() {
 echo "=== shell script checks ==="
 check "$FEED/nds-hooks/files/usr/lib/nds-hooks/binauth.sh"
 check "$FEED/nds-profile/files/etc/uci-defaults/99-nds-profile"
+check "$FEED/nds-profile/files/etc/init.d/nds-late"
 check "$FEED/nds-agent/files/etc/init.d/nds-agent"
+
+printf '  %-24s ' "ieee80211 detection"
+PROFILE="$FEED/nds-profile/files/etc/uci-defaults/99-nds-profile"
+if grep -q 'ieee80211.*head -1' "$PROFILE"; then
+  echo "FAIL (pipes ls through head)"
+  FAIL=1
+elif grep -q 'ls /sys/class/ieee80211/\*/ >/dev/null 2>&1' "$PROFILE"; then
+  echo "OK"
+else
+  echo "FAIL (missing safe ieee80211 check)"
+  FAIL=1
+fi
 
 echo
 echo "=== binauth behaviour ==="
