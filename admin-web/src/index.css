@@ -472,6 +472,17 @@ body {
   background: #e6f4ff;
 }
 
+.voucher-inline-code--used {
+  color: #8c8c8c;
+  background: #f5f5f5;
+  border-color: #e8e8e8;
+  cursor: default;
+}
+
+.voucher-inline-code--used:hover {
+  background: #f5f5f5;
+}
+
 .voucher-inline-code__icon {
   font-size: 11px;
   flex-shrink: 0;

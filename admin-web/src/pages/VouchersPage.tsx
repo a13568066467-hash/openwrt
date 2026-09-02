@@ -110,16 +110,17 @@ export default function VouchersPage() {
             width: 240,
             render: (_: unknown, r: VoucherBatch) => {
               if (r.count === 1 && r.code) {
+                const used = r.code_status === 'used';
                 return (
-                  <Tooltip title="点击复制">
+                  <Tooltip title={used ? '已使用' : '点击复制'}>
                     <span
-                      className="voucher-inline-code"
+                      className={`voucher-inline-code${used ? ' voucher-inline-code--used' : ''}`}
                       onClick={() => copyCodes([r.code!])}
                       role="button"
                       tabIndex={0}
                     >
                       {r.code}
-                      <CopyOutlined className="voucher-inline-code__icon" />
+                      {!used && <CopyOutlined className="voucher-inline-code__icon" />}
                     </span>
                   </Tooltip>
                 );

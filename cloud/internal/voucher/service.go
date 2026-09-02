@@ -180,12 +180,29 @@ func (s *Service) ListBatches() ([]BatchListItem, error) {
 		return nil, err
 	}
 	items := make([]BatchListItem, len(batches))
+	singleBatchIDs := make([]uint, 0)
 	for i, b := range batches {
 		items[i].VoucherBatch = b
-		if b.Count == 1 && b.CodesJSON != "" {
-			var codes []string
-			if json.Unmarshal([]byte(b.CodesJSON), &codes) == nil && len(codes) > 0 {
-				items[i].Code = codes[0]
+		if b.Count == 1 {
+			singleBatchIDs = append(singleBatchIDs, b.ID)
+			if b.CodesJSON != "" {
+				var codes []string
+				if json.Unmarshal([]byte(b.CodesJSON), &codes) == nil && len(codes) > 0 {
+					items[i].Code = codes[0]
+				}
+			}
+		}
+	}
+	if len(singleBatchIDs) > 0 {
+		var vouchers []database.Voucher
+		s.db.Where("batch_id IN ?", singleBatchIDs).Find(&vouchers)
+		statusByBatch := make(map[uint]string, len(vouchers))
+		for _, v := range vouchers {
+			statusByBatch[v.BatchID] = v.Status
+		}
+		for i := range items {
+			if status, ok := statusByBatch[items[i].ID]; ok {
+				items[i].CodeStatus = status
 			}
 		}
 	}
@@ -194,7 +211,8 @@ func (s *Service) ListBatches() ([]BatchListItem, error) {
 
 type BatchListItem struct {
 	database.VoucherBatch
-	Code string `json:"code,omitempty"`
+	Code       string `json:"code,omitempty"`
+	CodeStatus string `json:"code_status,omitempty"`
 }
 
 func (s *Service) ListByBatch(batchID uint) ([]database.Voucher, error) {
