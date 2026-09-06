@@ -1,0 +1,10 @@
+#!/bin/sh
+# Re-heal guest DHCP when the guest interface flaps (common after network/wifi reload).
+
+[ "$INTERFACE" = "guest" ] || exit 0
+
+case "$ACTION" in
+	ifup|ifupdate|ifdown)
+		/usr/lib/nds-profile/ensure-guest-dhcp.sh >/dev/null 2>&1 &
+		;;
+esac

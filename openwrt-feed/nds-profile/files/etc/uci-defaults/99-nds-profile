@@ -40,6 +40,11 @@ set dhcp.guest.interface='guest'
 set dhcp.guest.start='100'
 set dhcp.guest.limit='150'
 set dhcp.guest.leasetime='12h'
+# force=1: keep emitting dhcp-range even if guest briefly lacks an address
+# (otherwise phones associate to NDS-WiFi but never receive an IP).
+set dhcp.guest.ignore='0'
+set dhcp.guest.force='1'
+set dhcp.guest.dhcpv4='server'
 set dhcp.guest.ra='disabled'
 set dhcp.guest.dhcpv6='disabled'
 set dhcp.guest.ndp='disabled'

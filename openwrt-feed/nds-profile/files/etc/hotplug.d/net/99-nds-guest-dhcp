@@ -1,0 +1,13 @@
+#!/bin/sh
+# When the guest AP or bridge appears/changes, ensure DHCP pool is present.
+
+case "$INTERFACE" in
+	br-guest|phy0-ap0|phy1-ap0|wlan0-1|wlan1-1) ;;
+	*) exit 0 ;;
+esac
+
+case "$ACTION" in
+	add|register|link-up|ifup)
+		/usr/lib/nds-profile/ensure-guest-dhcp.sh >/dev/null 2>&1 &
+		;;
+esac

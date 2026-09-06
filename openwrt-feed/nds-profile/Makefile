@@ -6,7 +6,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=nds-profile
 PKG_VERSION:=1.0.0
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 
 PKG_MAINTAINER:=NDS Billing Project
 PKG_LICENSE:=GPL-2.0-or-later
@@ -44,6 +44,12 @@ define Package/nds-profile/install
 	$(INSTALL_BIN) ./files/etc/uci-defaults/99-nds-profile $(1)/etc/uci-defaults/
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/etc/init.d/nds-late $(1)/etc/init.d/
+	$(INSTALL_DIR) $(1)/usr/lib/nds-profile
+	$(INSTALL_BIN) ./files/usr/lib/nds-profile/ensure-guest-dhcp.sh $(1)/usr/lib/nds-profile/
+	$(INSTALL_DIR) $(1)/etc/hotplug.d/iface
+	$(INSTALL_BIN) ./files/etc/hotplug.d/iface/99-nds-guest-dhcp $(1)/etc/hotplug.d/iface/
+	$(INSTALL_DIR) $(1)/etc/hotplug.d/net
+	$(INSTALL_BIN) ./files/etc/hotplug.d/net/99-nds-guest-dhcp $(1)/etc/hotplug.d/net/
 endef
 
 $(eval $(call BuildPackage,nds-profile))

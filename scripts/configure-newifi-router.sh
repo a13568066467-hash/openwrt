@@ -169,6 +169,11 @@ sleep 2
 /etc/init.d/firewall reload
 sleep 3
 
+# Prefer shared self-heal (installed by apply-guest-dhcp-heal / nds-profile package).
+if [ -x /usr/lib/nds-profile/ensure-guest-dhcp.sh ]; then
+	/usr/lib/nds-profile/ensure-guest-dhcp.sh || true
+fi
+
 /etc/init.d/nds-late enable
 # Start openNDS after firewall is quiet; avoid later firewall reloads
 /etc/init.d/opennds enable
