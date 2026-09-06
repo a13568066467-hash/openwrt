@@ -33,10 +33,33 @@ ensure_guest_bridge() {
 		sleep 3
 	fi
 
+	# WiFi labs often leave br-guest DOWN after network restart (DEVICE_CLAIM_FAILED).
+	# Bring the AP member and bridge up, then claim the guest interface.
+	ip link set phy0-ap0 up 2>/dev/null || true
+	ip link set br-guest up 2>/dev/null || true
+	ifup guest 2>/dev/null || true
+	sleep 2
+
 	if ip link show br-guest >/dev/null 2>&1 && \
 	   ! ip -4 addr show br-guest 2>/dev/null | grep -q 'inet '; then
 		ifup guest 2>/dev/null
 		sleep 2
+	fi
+
+	# Last resort: force the lab guest address so openNDS/dnsmasq can bind.
+	if ip link show br-guest >/dev/null 2>&1 && \
+	   ! ip -4 addr show br-guest 2>/dev/null | grep -q 'inet '; then
+		ipaddr=$(uci -q get network.guest.ipaddr)
+		netmask=$(uci -q get network.guest.netmask)
+		[ -n "$ipaddr" ] || ipaddr='192.168.100.1'
+		[ -n "$netmask" ] || netmask='255.255.255.0'
+		# Convert dotted mask to prefix for ip addr add when possible; fall back to /24.
+		prefix=24
+		[ "$netmask" = "255.255.255.0" ] && prefix=24
+		ip addr add "${ipaddr}/${prefix}" dev br-guest 2>/dev/null || true
+		ip link set br-guest up 2>/dev/null || true
+		ifup guest 2>/dev/null || true
+		sleep 1
 	fi
 }
 

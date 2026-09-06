@@ -17,12 +17,20 @@ docker pull mysql:8.0
 docker pull redis:7-alpine
 ```
 
+Windows 实验室也可：
+
+```powershell
+.\scripts\start-lab.ps1
+```
+
 ## 前端部署
 
 ```bash
 cd admin-web && npm install && npm run build
 cd user-web && npm install && npm run build
 ```
+
+用户端构建产物由 cloud 的 `USER_WEB_DIR`（默认 `../user-web/dist`）以 `/portal/` 提供。
 
 ## OpenWrt 固件编译
 
@@ -45,6 +53,9 @@ bash build/build.sh ath79_generic
 ```bash
 uci set opennds.@opennds[0].fasremotefqdn='your-cloud-domain.com'
 uci set opennds.@opennds[0].fasport='8443'
+uci set opennds.@opennds[0].gatewayname='NewWiFI'
+uci set opennds.@opennds[0].gatewayfqdn='home.me'
+uci set opennds.@opennds[0].statuspath='/usr/lib/nds-hooks/client_status.sh'
 uci set nds-agent.main.cloud_url='https://your-cloud-domain.com:8443'
 uci set nds-agent.main.device_id='dev-001'
 uci set nds-agent.main.device_secret='your-secret'
@@ -53,14 +64,34 @@ uci commit
 /etc/init.d/nds-agent restart
 ```
 
+Newifi 实验室一键配置（LAN 口接电脑）：
+
+```powershell
+python scripts/apply-newifi-setup.py
+python scripts/apply-home-me-status.py      # 下发 home.me 中文状态页
+```
+
+访客 WiFi 网段为 `192.168.100.0/24`（网关 `192.168.100.1`）；管理 LAN 可能是 `192.168.10.1`。手机状态页地址：`http://home.me`。
+
+若 `network restart` 后访客网无法拿 IP，`nds-late` 会尝试自愈 `br-guest`；仍失败时可手动：
+
+```bash
+ip link set phy0-ap0 up; ip link set br-guest up
+ifup guest
+/etc/init.d/dnsmasq restart
+/etc/init.d/opennds restart
+```
+
 ## 验收清单
 
 - [ ] 手机连 WiFi 自动弹出登录页
-- [ ] 注册后自动绑定 MAC 并上网
+- [ ] 注册/登录后跳转网关放行并进入用户中心
 - [ ] 流量按上下行合计计量
 - [ ] 额度耗尽 5 秒内断网
 - [ ] 卡密充值后恢复上网
 - [ ] 断网降级后恢复补报无重复
+- [ ] `http://home.me` 显示 NewWiFI 中文状态页
+- [ ] 用户中心「我的设备」能看到设备名称
 
 ## 全链路测试
 

@@ -119,7 +119,9 @@ fi
 uci -q batch <<EOF
 set opennds.@opennds[0].enabled='1'
 set opennds.@opennds[0].gatewayinterface='br-guest'
-set opennds.@opennds[0].gatewayname='NDS-Billing-Gateway'
+set opennds.@opennds[0].gatewayname='NewWiFI'
+set opennds.@opennds[0].gatewayfqdn='home.me'
+set opennds.@opennds[0].statuspath='/usr/lib/nds-hooks/client_status.sh'
 set opennds.@opennds[0].fas_secure_enabled='4'
 set opennds.@opennds[0].fasremotefqdn='${CLOUD_HOST}'
 set opennds.@opennds[0].fasport='${CLOUD_PORT}'
