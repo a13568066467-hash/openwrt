@@ -7,13 +7,25 @@ import UsagePage from './pages/UsagePage';
 import DevicesPage from './pages/DevicesPage';
 import TabBar from './components/TabBar';
 
+function consumePortalToken() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('token');
+  if (!token) return;
+  localStorage.setItem('user_token', token);
+  params.delete('token');
+  const qs = params.toString();
+  const next = window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash;
+  window.history.replaceState({}, '', next);
+}
+
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   return localStorage.getItem('user_token') ? <>{children}</> : <Navigate to="/login" />;
 }
 
 export default function App() {
+  consumePortalToken();
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={import.meta.env.BASE_URL}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/*" element={

@@ -13,11 +13,13 @@ type Config struct {
 	DatabaseDSN       string
 	RedisAddr         string
 	JWTSecret         string
-	FASKey            string
-	AuthLogPath       string
-	QuotaExpiryDays   int
-	DefaultUploadRate int
+	FASKey              string
+	AuthLogPath         string
+	QuotaExpiryDays     int
+	DefaultUploadRate   int
 	DefaultDownloadRate int
+	UserPortalURL       string
+	UserWebDir          string
 }
 
 func Load() *Config {
@@ -34,6 +36,8 @@ func Load() *Config {
 		QuotaExpiryDays:     getEnvInt("QUOTA_EXPIRY_DAYS", 90),
 		DefaultUploadRate:   getEnvInt("DEFAULT_UPLOAD_RATE", 0),
 		DefaultDownloadRate: getEnvInt("DEFAULT_DOWNLOAD_RATE", 0),
+		UserPortalURL:       getEnv("USER_PORTAL_URL", ""),
+		UserWebDir:          getEnv("USER_WEB_DIR", ""),
 	}
 }
 

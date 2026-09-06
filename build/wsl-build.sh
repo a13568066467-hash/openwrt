@@ -41,6 +41,12 @@ grep -q "src-link $FEED " feeds.conf || echo "src-link $FEED $PROJECT/openwrt-fe
 ./scripts/feeds install -p "$FEED" nds-agent nds-hooks nds-profile
 
 echo "=== [2/5] applying $TARGET config ==="
+# Recover empty target metadata (shallow/interrupted trees leave tmp/.targetinfo at 0 bytes,
+# which makes defconfig drop CONFIG_TARGET_* and then fail kernel-version.mk).
+if [ ! -s tmp/.targetinfo ] && ls tmp/info/.targetinfo-* >/dev/null 2>&1; then
+  cat tmp/info/.targetinfo-* > tmp/.targetinfo
+  ./scripts/target-metadata.pl config tmp/.targetinfo > tmp/.config-target.in
+fi
 cp "$CONFIG" .config
 make defconfig > /dev/null
 

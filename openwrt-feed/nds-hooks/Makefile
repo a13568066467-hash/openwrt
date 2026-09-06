@@ -43,6 +43,7 @@ endef
 define Package/nds-hooks/install
 	$(INSTALL_DIR) $(1)/usr/lib/nds-hooks
 	$(INSTALL_BIN) ./files/usr/lib/nds-hooks/binauth.sh $(1)/usr/lib/nds-hooks/
+	$(INSTALL_BIN) ./files/usr/lib/nds-hooks/client_status.sh $(1)/usr/lib/nds-hooks/
 endef
 
 $(eval $(call BuildPackage,nds-hooks))

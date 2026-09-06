@@ -73,6 +73,7 @@ type UserDevice struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	UserID    uint      `gorm:"index" json:"user_id"`
 	MAC       string    `gorm:"index;size:17" json:"mac"`
+	Name      string    `gorm:"size:128" json:"name"`
 	FirstSeen time.Time `json:"first_seen"`
 	LastSeen  time.Time `json:"last_seen"`
 }

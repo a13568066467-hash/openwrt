@@ -1,5 +1,6 @@
 import { Dialog } from 'antd-mobile';
 import type { CSSProperties } from 'react';
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { userApi, formatTraffic, formatSpeed } from '../api';
@@ -89,12 +90,18 @@ export default function HomePage() {
     queryFn: () => userApi.getProfile().then(r => r.data),
   });
 
-  if (isLoading) return <PageLoading />;
-
   const remaining = user?.quota_remaining_bytes ?? 0;
   const remainingMB = remaining / 1024 / 1024;
   const percent = Math.min(100, (remainingMB / 1024) * 100);
   const isActive = user?.status === 'active';
+
+  useEffect(() => {
+    if (!isLoading && user && remaining <= 0) {
+      navigate('/recharge', { replace: true });
+    }
+  }, [isLoading, user, remaining, navigate]);
+
+  if (isLoading || (user && remaining <= 0)) return <PageLoading />;
 
   const handleLogout = () => {
     Dialog.confirm({

@@ -36,6 +36,7 @@ type reportItem struct {
 	Seq           int64  `json:"seq"`
 	MAC           string `json:"mac"`
 	IP            string `json:"ip"`
+	Hostname      string `json:"hostname"`
 	DownloadBytes int64  `json:"download_bytes"`
 	UploadBytes   int64  `json:"upload_bytes"`
 	DeltaBytes    int64  `json:"delta_bytes"`
@@ -63,9 +64,16 @@ type reportResponse struct {
 
 type heartbeatRequest struct {
 	credentials
-	Uptime       int64  `json:"uptime"`
-	Online       bool   `json:"online"`
-	AgentVersion string `json:"agent_version"`
+	Uptime       int64            `json:"uptime"`
+	Online       bool             `json:"online"`
+	AgentVersion string           `json:"agent_version"`
+	Clients      []heartbeatClient `json:"clients"`
+}
+
+type heartbeatClient struct {
+	MAC      string `json:"mac"`
+	IP       string `json:"ip"`
+	Hostname string `json:"hostname"`
 }
 
 type command struct {
@@ -165,6 +173,8 @@ func (h *Handler) HandleReport(w http.ResponseWriter, r *http.Request) {
 	for _, item := range req.Reports {
 		mac := strings.ToLower(item.MAC)
 
+		h.touchDeviceName(mac, item.Hostname)
+
 		fresh, err := h.recordUsage(item, mac)
 		if err != nil {
 			http.Error(w, "storage failure", http.StatusInternalServerError)
@@ -227,10 +237,28 @@ func (h *Handler) HandleHeartbeat(w http.ResponseWriter, r *http.Request) {
 
 	h.markSeen(router)
 
+	for _, client := range req.Clients {
+		h.touchDeviceName(strings.ToLower(client.MAC), client.Hostname)
+	}
+
 	json.NewEncoder(w).Encode(heartbeatResponse{
 		OK:       true,
 		Commands: h.takeCommands(router.ID),
 	})
+}
+
+// touchDeviceName stores the DHCP hostname on every UserDevice row that shares
+// this MAC. Empty / placeholder names from BusyBox ("*") are ignored.
+func (h *Handler) touchDeviceName(mac, hostname string) {
+	hostname = strings.TrimSpace(hostname)
+	if mac == "" || hostname == "" || hostname == "*" {
+		return
+	}
+	if len(hostname) > 128 {
+		hostname = hostname[:128]
+	}
+	h.db.Model(&database.UserDevice{}).Where("mac = ?", mac).
+		Updates(map[string]any{"name": hostname, "last_seen": time.Now()})
 }
 
 // takeCommands drains the pending queue for a router. Commands are marked

@@ -31,7 +31,7 @@ func New(db *gorm.DB, cfg *config.Config) http.Handler {
 	}))
 
 	jwtSvc := auth.NewJWTService(cfg.JWTSecret)
-	fasHandler := fas.NewHandler(db, cfg)
+	fasHandler := fas.NewHandler(db, cfg, jwtSvc)
 	deviceHandler := device.NewHandler(db)
 	adminHandler := admin.NewHandler(db, jwtSvc)
 	userHandler := userapi.NewHandler(db, jwtSvc)
@@ -125,6 +125,8 @@ func New(db *gorm.DB, cfg *config.Config) http.Handler {
 		}
 		json.NewEncoder(w).Encode(cfg)
 	})
+
+	mountUserPortal(r, cfg.UserWebDir)
 
 	return r
 }

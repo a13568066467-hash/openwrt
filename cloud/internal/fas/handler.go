@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nds-billing/cloud/internal/auth"
 	"github.com/nds-billing/cloud/internal/config"
 	"github.com/nds-billing/cloud/internal/database"
 	"github.com/nds-billing/cloud/internal/ledger"
@@ -25,10 +26,11 @@ type Handler struct {
 	db     *gorm.DB
 	cfg    *config.Config
 	ledger *ledger.Service
+	jwt    *auth.JWTService
 }
 
-func NewHandler(db *gorm.DB, cfg *config.Config) *Handler {
-	return &Handler{db: db, cfg: cfg, ledger: ledger.New(db)}
+func NewHandler(db *gorm.DB, cfg *config.Config, jwt *auth.JWTService) *Handler {
+	return &Handler{db: db, cfg: cfg, ledger: ledger.New(db), jwt: jwt}
 }
 
 type FASParams struct {
@@ -40,6 +42,7 @@ type FASParams struct {
 	AuthDir        string
 	OriginURL      string
 	ClientIF       string
+	Tok            string
 }
 
 func (h *Handler) decodeFAS(encoded string) (*FASParams, error) {
@@ -47,27 +50,52 @@ func (h *Handler) decodeFAS(encoded string) (*FASParams, error) {
 	if err != nil {
 		return nil, err
 	}
-	params := make(map[string]string)
-	for _, part := range strings.Split(string(raw), ", ") {
-		kv := strings.SplitN(part, "=", 2)
-		if len(kv) == 2 {
-			params[kv[0]] = kv[1]
-		}
-	}
+	params := parseFASPairs(string(raw))
 	return &FASParams{
 		ClientIP:       params["clientip"],
 		ClientMAC:      params["clientmac"],
 		GatewayName:    params["gatewayname"],
-		ClientHID:      params["client_hid"],
+		ClientHID:      firstNonEmpty(params["client_hid"], params["hid"]),
 		GatewayAddress: params["gatewayaddress"],
 		AuthDir:        params["authdir"],
 		OriginURL:      params["originurl"],
 		ClientIF:       params["clientif"],
+		Tok:            firstNonEmpty(params["tok"], params["token"]),
 	}, nil
 }
 
+func parseFASPairs(raw string) map[string]string {
+	params := make(map[string]string)
+	for _, part := range strings.Split(raw, ",") {
+		part = strings.TrimSpace(part)
+		kv := strings.SplitN(part, "=", 2)
+		if len(kv) == 2 {
+			params[strings.TrimSpace(kv[0])] = strings.TrimSpace(kv[1])
+		}
+	}
+	return params
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
 func (h *Handler) gatewayHash(gatewayName string) string {
-	sum := sha256.Sum256([]byte(url.QueryEscape(gatewayName)))
+	// openNDS authmon hashes the already-urlencoded gatewayname string.
+	// FAS payloads arrive pre-encoded (e.g. "Name%20Node%3a..."); hashing
+	// again with QueryEscape double-encodes and authmon never finds the queue.
+	name := gatewayName
+	if !strings.Contains(name, "%") {
+		name = url.QueryEscape(name)
+		name = strings.ReplaceAll(name, "%3A", "%3a")
+		name = strings.ReplaceAll(name, "%2F", "%2f")
+	}
+	sum := sha256.Sum256([]byte(name))
 	return hex.EncodeToString(sum[:])
 }
 
@@ -88,6 +116,14 @@ func (h *Handler) HandleFAS(w http.ResponseWriter, r *http.Request) {
 
 	fasEncoded := r.URL.Query().Get("fas")
 	if fasEncoded == "" {
+		// openNDS probes the FAS URL at startup. A 400 here makes the
+		// daemon treat the portal as down and refuse to stay running.
+		if r.Method != http.MethodPost {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("FAS OK\n"))
+			return
+		}
 		http.Error(w, "missing fas parameter", http.StatusBadRequest)
 		return
 	}
@@ -202,11 +238,12 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request, params *FA
 	}
 
 	if user.QuotaRemainingBytes <= 0 {
-		h.renderPortal(w, params, fasEncoded, "流量已用尽，请充值")
+		// Do not grant network access; send the user to the recharge portal.
+		h.renderQuotaExhausted(w, r, &user)
 		return
 	}
 
-	h.authorizeClient(w, params, &user)
+	h.authorizeClient(w, r, params, &user)
 }
 
 func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request, params *FASParams, username, password string) {
@@ -245,7 +282,7 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request, params 
 
 	h.ledger.TopUp(user.ID, 100*1024*1024, "register_trial", "注册赠送100MB", nil)
 	h.bindMAC(user.ID, params.ClientMAC)
-	h.authorizeClient(w, params, &user)
+	h.authorizeClient(w, r, params, &user)
 }
 
 func (h *Handler) bindMAC(userID uint, mac string) {
@@ -260,7 +297,7 @@ func (h *Handler) bindMAC(userID uint, mac string) {
 	}
 }
 
-func (h *Handler) authorizeClient(w http.ResponseWriter, params *FASParams, user *database.User) {
+func (h *Handler) authorizeClient(w http.ResponseWriter, r *http.Request, params *FASParams, user *database.User) {
 	h.bindMAC(user.ID, params.ClientMAC)
 	h.openSession(params, user)
 
@@ -285,7 +322,9 @@ func (h *Handler) authorizeClient(w http.ResponseWriter, params *FASParams, user
 	os.MkdirAll(queueDir, 0700)
 	os.WriteFile(filepath.Join(queueDir, rhid), []byte(logLine), 0600)
 
-	h.renderSuccess(w, params)
+	// Level 1 FAS: browser must hit gateway authdir with tok=rhid.
+	// Auth queue is still written for level 3/4 authmon.
+	h.renderSuccess(w, r, params, user, rhid, customB64)
 }
 
 // openSession records who is online where. Usage reports arrive later keyed
@@ -300,7 +339,15 @@ func (h *Handler) openSession(params *FASParams, user *database.User) {
 		Updates(map[string]any{"active": false, "ended_at": now})
 
 	var router database.Router
-	if err := h.db.Where("device_id = ?", params.GatewayName).First(&router).Error; err != nil {
+	deviceID := params.GatewayName
+	if decoded, err := url.QueryUnescape(deviceID); err == nil {
+		deviceID = decoded
+	}
+	// openNDS appends " Node:<mac>" to gatewayname; lab device_id is the base name.
+	if base, _, ok := strings.Cut(deviceID, " Node:"); ok {
+		deviceID = strings.TrimSpace(base)
+	}
+	if err := h.db.Where("device_id = ?", deviceID).First(&router).Error; err != nil {
 		// An unregistered gateway can still authorise clients; their traffic
 		// simply cannot be attributed until the router is registered.
 		return
@@ -329,65 +376,82 @@ func (h *Handler) computeAuthQuota(remaining int64) int64 {
 	return tenPercent
 }
 
-func (h *Handler) renderPortal(w http.ResponseWriter, params *FASParams, fasEncoded, errMsg string) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	errHTML := ""
-	if errMsg != "" {
-		errHTML = fmt.Sprintf(`<div class="error">%s</div>`, errMsg)
+func (h *Handler) portalURL(r *http.Request, user *database.User, portalPath string) string {
+	base := strings.TrimSpace(h.cfg.UserPortalURL)
+	if base == "" {
+		scheme := "http"
+		if r.TLS != nil {
+			scheme = "https"
+		}
+		host := r.Host
+		if host == "" {
+			host = "127.0.0.1:8080"
+		}
+		base = scheme + "://" + host + "/portal/"
 	}
-	fmt.Fprintf(w, `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>WiFi 认证</title>
-<style>
-body{font-family:sans-serif;max-width:400px;margin:40px auto;padding:20px;background:#f5f5f5}
-.card{background:#fff;border-radius:12px;padding:24px;box-shadow:0 2px 8px rgba(0,0,0,.1)}
-h2{text-align:center;color:#333;margin-bottom:20px}
-input{width:100%%;padding:12px;margin:8px 0;border:1px solid #ddd;border-radius:8px;box-sizing:border-box;font-size:16px}
-button{width:100%%;padding:14px;margin:8px 0;border:none;border-radius:8px;font-size:16px;cursor:pointer}
-.btn-primary{background:#1677ff;color:#fff}
-.btn-secondary{background:#f0f0f0;color:#333}
-.error{color:#ff4d4f;text-align:center;margin-bottom:12px}
-.tabs{display:flex;gap:8px;margin-bottom:16px}
-.tab{flex:1;text-align:center;padding:8px;cursor:pointer;border-bottom:2px solid transparent}
-.tab.active{border-color:#1677ff;color:#1677ff}
-</style></head><body>
-<div class="card">
-<h2>WiFi 上网认证</h2>
-%s
-<form method="POST">
-<input type="hidden" name="fas" value="%s">
-<div id="login-form">
-<input name="username" placeholder="用户名" required>
-<input name="password" type="password" placeholder="密码" required>
-<input type="hidden" name="action" value="login">
-<button type="submit" class="btn-primary">登录上网</button>
-</div>
-</form>
-<form method="POST" style="margin-top:12px">
-<input type="hidden" name="fas" value="%s">
-<input name="username" placeholder="新用户名" required>
-<input name="password" type="password" placeholder="设置密码" required>
-<input type="hidden" name="action" value="register">
-<button type="submit" class="btn-secondary">注册账户</button>
-</form>
-<p style="text-align:center;color:#999;font-size:12px;margin-top:16px">注册即送 100MB 流量</p>
-</div></body></html>`,
-		errHTML,
-		fasEncoded,
-		fasEncoded,
-	)
+	if !strings.HasSuffix(base, "/") && !strings.Contains(base, "?") {
+		base += "/"
+	}
+
+	u, err := url.Parse(base)
+	if err != nil {
+		u = &url.URL{Scheme: "http", Host: "127.0.0.1:8080", Path: "/portal/"}
+	}
+	if portalPath == "" {
+		portalPath = "/"
+	}
+	if !strings.HasPrefix(portalPath, "/") {
+		portalPath = "/" + portalPath
+	}
+	// Keep /portal basename and append app path (e.g. /recharge).
+	root := strings.TrimSuffix(u.Path, "/")
+	if root == "" {
+		root = "/portal"
+	}
+	u.Path = root + portalPath
+
+	if h.jwt != nil && user != nil {
+		if token, err := h.jwt.Generate(user.ID, "user"); err == nil && token != "" {
+			q := u.Query()
+			q.Set("token", token)
+			u.RawQuery = q.Encode()
+		}
+	}
+	return u.String()
 }
 
-func (h *Handler) renderSuccess(w http.ResponseWriter, params *FASParams) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	redirect := params.OriginURL
-	if redirect == "" {
-		redirect = "http://www.google.com"
+func gatewayAuthURL(params *FASParams, redir, rhid, customB64 string) string {
+	if params == nil || params.GatewayAddress == "" {
+		return ""
 	}
-	fmt.Fprintf(w, `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta http-equiv="refresh" content="2;url=%s">
-<title>认证成功</title></head><body style="text-align:center;padding:40px;font-family:sans-serif">
-<h2>认证成功</h2><p>正在为您开通网络...</p></body></html>`, redirect)
+	// Level 0 sends the client token; level 1/4 send rhid=sha256(hid+faskey).
+	tok := firstNonEmpty(params.Tok, rhid)
+	if tok == "" {
+		return ""
+	}
+	authdir := params.AuthDir
+	if authdir == "" {
+		authdir = "/opennds_auth/"
+	}
+	if !strings.HasPrefix(authdir, "/") {
+		authdir = "/" + authdir
+	}
+	if !strings.HasSuffix(authdir, "/") {
+		authdir += "/"
+	}
+	raw := "http://" + params.GatewayAddress + authdir
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	q := u.Query()
+	q.Set("tok", tok)
+	q.Set("redir", redir)
+	if customB64 != "" {
+		q.Set("custom", customB64)
+	}
+	u.RawQuery = q.Encode()
+	return u.String()
 }
 
 func ParseInt64(s string) int64 {

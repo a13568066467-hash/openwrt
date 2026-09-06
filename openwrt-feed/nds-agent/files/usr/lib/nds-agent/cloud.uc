@@ -23,6 +23,34 @@ function is_online() {
 	return online;
 }
 
+function hostname_for_mac(mac) {
+	let want = lc(trim(mac ?? ''));
+	let raw;
+
+	try {
+		raw = readfile('/tmp/dhcp.leases');
+	} catch (e) {
+		return '';
+	}
+
+	if (!raw)
+		return '';
+
+	for (let line in split(raw, '\n')) {
+		let parts = split(trim(line), ' ');
+		if (length(parts) < 4)
+			continue;
+		if (lc(parts[1]) != want)
+			continue;
+		let host = parts[3];
+		if (!host || host == '*')
+			return '';
+		return host;
+	}
+
+	return '';
+}
+
 function load_seq(path) {
 	try {
 		seq = int(readfile(path) ?? 0);
@@ -158,6 +186,7 @@ function report(config) {
 			seq: bump_seq(config.seq_file),
 			mac: client.mac,
 			ip: client.ip,
+			hostname: hostname_for_mac(client.mac),
 			download_bytes: client.download_bytes,
 			upload_bytes: client.upload_bytes,
 			delta_bytes: client.unreported_bytes,
@@ -213,10 +242,21 @@ function run_command(config, command) {
 }
 
 function heartbeat(config) {
+	let clients = [];
+
+	for (let client in snapshot()) {
+		push(clients, {
+			mac: client.mac,
+			ip: client.ip,
+			hostname: hostname_for_mac(client.mac),
+		});
+	}
+
 	let response = send(config, '/api/v1/device/heartbeat', {
 		uptime: time(),
 		online: true,
 		agent_version: config.version,
+		clients,
 	});
 
 	if (!response?.ok) {

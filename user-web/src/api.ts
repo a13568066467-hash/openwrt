@@ -32,6 +32,7 @@ export interface Plan {
 export interface UserDevice {
   id: number;
   mac: string;
+  name?: string;
   first_seen: string;
   last_seen: string;
 }

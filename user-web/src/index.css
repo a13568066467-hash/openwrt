@@ -774,3 +774,60 @@ body {
   box-shadow: 0 4px 16px rgba(108,92,231,0.35);
 }
 .empty-state__cta:active { opacity: 0.9; }
+
+/* ══════════════════════════════════════
+   Devices page
+   ══════════════════════════════════════ */
+.page--devices { --hero-from: #00b894; --hero-mid: #1296db; --hero-to: #0a6fad; }
+
+.device-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.device-card {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  box-shadow: var(--shadow-soft);
+}
+
+.device-card__icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--brand-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.device-card__body { flex: 1; min-width: 0; }
+
+.device-card__name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+  word-break: break-word;
+}
+
+.device-card__mac {
+  font-size: 12px;
+  color: var(--brand);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  margin-bottom: 8px;
+}
+
+.device-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
