@@ -57,8 +57,10 @@ htmlentityencode() {
 }
 
 parse_variables() {
+	# openNDS may emit "key=val,key=val" or "key=val, key=val"
 	for var in $queryvarlist; do
-		evalstr=$(echo "$query" | awk -F"$var=" '{print $2}' | awk -F', ' '{print $1}')
+		evalstr=$(echo "$query" | awk -F"$var=" '{print $2}' | awk -F',' '{print $1}')
+		evalstr=$(echo "$evalstr" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
 		evalstr=$(printf "${evalstr//%/\\x}")
 		htmlentityencode "$evalstr"
 		evalstr=$entityencoded
@@ -271,12 +273,8 @@ fi
 if [ "$status" = "status" ] || [ "$status" = "err511" ]; then
 	parse_parameters
 
-	if [ -z "$gatewayfqdn" ] || [ "$gatewayfqdn" = "disable" ] || [ "$gatewayfqdn" = "disabled" ]; then
-		url="http://$gatewayaddress"
-	else
-		url="http://$gatewayfqdn"
-	fi
-
+	# Decode openNDS query first so gatewayfqdn/gatewayaddress are available
+	# before we build refresh/login form actions.
 	if [ -n "$b64query" ]; then
 		ndsctlcmd="b64decode $b64query"
 		do_ndsctl
@@ -292,6 +290,20 @@ if [ "$status" = "status" ] || [ "$status" = "err511" ]; then
 		query=$querystr
 		parse_variables
 	fi
+
+	if [ -z "$gatewayfqdn" ] || [ "$gatewayfqdn" = "disable" ] || [ "$gatewayfqdn" = "disabled" ] \
+		|| [ "$gatewayfqdn" = "暂无" ] || [ "$gatewayfqdn" = "不限" ]; then
+		if [ -n "$gatewayaddress" ] && [ "$gatewayaddress" != "暂无" ] && [ "$gatewayaddress" != "不限" ]; then
+			url="http://$gatewayaddress"
+		else
+			url="http://home.me"
+		fi
+	else
+		url="http://$gatewayfqdn"
+	fi
+	case "$url" in
+		http://|http:///|http://暂无|http://暂无/|http://不限|http://不限/) url="http://home.me" ;;
+	esac
 
 	header
 	body
