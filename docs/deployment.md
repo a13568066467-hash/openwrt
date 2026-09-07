@@ -106,9 +106,35 @@ ifup guest
 /etc/init.d/opennds restart
 ```
 
-## 验收清单
+## 定版封装清单
 
-- [ ] 手机连 NDS-WiFi 能自动拿到 `192.168.100.x`（`python scripts/check-guest-dhcp.py` 为 PASS）
+封装前按这个顺序做（固件目标：`ramips_mt7621` / Newifi D2）：
+
+1. **代码定版**：合并本分支关键提交；`git push`；打 tag（如 `v1.0.0`）。
+2. **重编固件**（当前 `build/images` 若早于最新 feed 改动则必须重编）：
+
+```bash
+# WSL
+bash build/build.sh ramips_mt7621
+# 产物：
+# ~/owrt/openwrt/bin/targets/ramips/mt7621/*newifi-d2*sysupgrade.bin
+# 可同步到 build/images/
+```
+
+3. **真机刷入**：Breed → 固件更新 → 选 sysupgrade（保留 Bootloader/EEPROM）→ 更新。
+4. **实验室收尾配置**（刷完默认 LAN 仍是 `192.168.1.1`，不是 `192.168.10.1`）：
+
+```powershell
+# 电脑网线接 LAN，先关掉 Meta/代理
+python scripts/apply-newifi-setup.py
+python scripts/apply-guest-dhcp-heal.py
+python scripts/apply-home-me-status.py
+python scripts/check-guest-dhcp.py   # RESULT=PASS
+```
+
+5. **验收**：手机连 NDS-WiFi 拿 `192.168.100.x` → 登录放行 → `http://home.me` → 用户中心设备名。
+
+说明：`192.168.10.1` 是实验室改过的管理地址；Breed / 全新 OpenWrt 默认是 `192.168.1.1`。验证时务必网线接 LAN，并避免 VPN 劫持探测结果。
 - [ ] 手机连 WiFi 自动弹出登录页
 - [ ] 注册/登录后跳转网关放行并进入用户中心
 - [ ] 流量按上下行合计计量
