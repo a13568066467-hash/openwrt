@@ -1,4 +1,5 @@
-# 实验室一键：Docker + cloud + 管理端/用户端 + 路由器联调
+﻿# Lab one-shot: Docker + cloud + admin/user frontends + router pair
+# Saved as UTF-8 with BOM for Windows PowerShell 5.x Chinese safety.
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $Cloud = Join-Path $Root "cloud"
@@ -7,7 +8,7 @@ $CloudIP = if ($env:NDS_CLOUD_IP) { $env:NDS_CLOUD_IP } else { "192.168.1.125" }
 
 function Import-DotEnv([string]$Path) {
   if (-not (Test-Path $Path)) { return }
-  Get-Content $Path | ForEach-Object {
+  Get-Content -LiteralPath $Path -Encoding UTF8 | ForEach-Object {
     if ($_ -match '^\s*#' -or $_ -match '^\s*$') { return }
     $name, $value = $_ -split '=', 2
     Set-Item -Path "Env:$name" -Value $value
@@ -30,7 +31,31 @@ function Find-Npm {
     $cmd = Get-Command $c -ErrorAction SilentlyContinue
     if ($cmd) { return $cmd.Source }
   }
-  throw "找不到 npm，请安装 Node 或设置 NPM 环境变量"
+  throw "npm not found. Install Node or set NPM env var."
+}
+
+function Start-CloudServer {
+  $logDir = Join-Path $Root "build\logs"
+  New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+  $userWeb = (Join-Path $Root "user-web\dist")
+  $launcher = Join-Path $logDir "start-cloud.ps1"
+  $launcherBody = @"
+`$ErrorActionPreference = 'Stop'
+Set-Location -LiteralPath '$Cloud'
+if (Test-Path .env) {
+  Get-Content -LiteralPath .env -Encoding UTF8 | ForEach-Object {
+    if (`$_ -match '^\s*#' -or `$_ -match '^\s*`$') { return }
+    `$n, `$v = `$_ -split '=', 2
+    Set-Item -Path ("Env:" + `$n) -Value `$v
+  }
+}
+`$env:USER_PORTAL_URL = 'http://${CloudIP}:8080/portal/'
+`$env:USER_WEB_DIR = '$userWeb'
+go run ./cmd/server
+"@
+  $utf8Bom = New-Object System.Text.UTF8Encoding $true
+  [System.IO.File]::WriteAllText($launcher, $launcherBody, $utf8Bom)
+  Start-Process powershell -ArgumentList @("-NoExit", "-File", $launcher)
 }
 
 Import-DotEnv $EnvFile
@@ -39,52 +64,48 @@ $env:USER_WEB_DIR = Join-Path $Root "user-web\dist"
 
 Write-Host "=== 1/5 Docker MySQL / Redis ==="
 docker info *> $null
-if ($LASTEXITCODE -ne 0) { throw "请先启动 Docker Desktop" }
+if ($LASTEXITCODE -ne 0) { throw "Start Docker Desktop first." }
 Push-Location $Cloud
 docker compose up -d
 $ready = $false
 for ($i = 0; $i -lt 45; $i++) {
-  docker compose exec -T mysql mysqladmin ping -h localhost -unds -pnds123 2>$null | Out-Null
+  # mysqladmin prints a password warning on stderr; do not treat it as fatal.
+  cmd /c "docker compose exec -T mysql mysqladmin ping -h localhost -unds -pnds123 1>nul 2>nul"
   if ($LASTEXITCODE -eq 0) { $ready = $true; break }
   Start-Sleep 2
 }
-if (-not $ready) { Pop-Location; throw "MySQL 未就绪" }
+if (-not $ready) { Pop-Location; throw "MySQL is not ready." }
 Pop-Location
 
-Write-Host "=== 2/5 构建用户端静态资源 (供 cloud /portal/) ==="
+Write-Host "=== 2/5 Build user-web (cloud /portal/) ==="
 $npm = Find-Npm
 Push-Location (Join-Path $Root "user-web")
 & $npm run build
-if ($LASTEXITCODE -ne 0) { Pop-Location; throw "user-web build 失败" }
+if ($LASTEXITCODE -ne 0) { Pop-Location; throw "user-web build failed." }
 Pop-Location
 
-Write-Host "=== 3/5 云端 API :8080 / :8443 ==="
+Write-Host "=== 3/5 Cloud API :8080 / :8443 ==="
 foreach ($p in 8080, 8443, 3000, 3001) { Ensure-Firewall $p }
 if (-not (Test-Port 8080)) {
-  $logDir = Join-Path $Root "build\logs"
-  New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-  Start-Process powershell -ArgumentList @(
-    "-NoExit", "-Command",
-    "Set-Location '$Cloud'; Get-Content .env | ForEach-Object { if (`$_ -match '^\s*#|^\s*$') { return }; `$n,`$v = `$_ -split '=',2; Set-Item Env:`$n `$v }; `$env:USER_PORTAL_URL='http://${CloudIP}:8080/portal/'; `$env:USER_WEB_DIR='$((Join-Path $Root 'user-web\dist') -replace '\\','\\')'; go run ./cmd/server"
-  )
+  Start-CloudServer
   for ($i = 0; $i -lt 40; $i++) {
     if (Test-Port 8080) { break }
     Start-Sleep 2
   }
 }
-if (-not (Test-Port 8080)) { throw "cloud 未在 8080 监听" }
+if (-not (Test-Port 8080)) { throw "cloud is not listening on 8080." }
 
-Write-Host "=== 4/5 管理端 :3000 / 用户端 Vite :3001 ==="
+Write-Host "=== 4/5 Admin :3000 / User Vite :3001 ==="
 if (-not (Test-Port 3000)) {
   Start-Process powershell -ArgumentList @(
     "-NoExit", "-Command",
-    "Set-Location (Join-Path '$Root' 'admin-web'); & '$npm' run dev"
+    "Set-Location -LiteralPath (Join-Path '$Root' 'admin-web'); & '$npm' run dev"
   )
 }
 if (-not (Test-Port 3001)) {
   Start-Process powershell -ArgumentList @(
     "-NoExit", "-Command",
-    "Set-Location (Join-Path '$Root' 'user-web'); & '$npm' run dev"
+    "Set-Location -LiteralPath (Join-Path '$Root' 'user-web'); & '$npm' run dev"
   )
 }
 for ($i = 0; $i -lt 30; $i++) {
@@ -92,17 +113,17 @@ for ($i = 0; $i -lt 30; $i++) {
   Start-Sleep 2
 }
 
-Write-Host "=== 5/5 路由器联调 (开放 Guest→前端端口 + 稳定 openNDS) ==="
+Write-Host "=== 5/5 Pair router frontends / stabilize openNDS ==="
 python (Join-Path $Root "scripts\pair-router-frontends.py")
 if ($LASTEXITCODE -ne 0) {
-  Write-Host "pair 失败，尝试 stabilize..."
+  Write-Host "pair failed, trying stabilize..."
   python (Join-Path $Root "scripts\stabilize-opennds.py")
 }
 
 Write-Host ""
-Write-Host "全部就绪："
-Write-Host "  管理端(电脑)   http://${CloudIP}:3000   admin / admin123"
-Write-Host "  用户端(开发)   http://${CloudIP}:3001/portal/"
-Write-Host "  用户中心(手机) http://${CloudIP}:8080/portal/   ← 认证后跳转"
-Write-Host "  认证入口       手机连 NDS-WiFi → http://status.client"
-Write-Host "  云端 API       http://${CloudIP}:8080"
+Write-Host "Ready:"
+Write-Host "  Admin (PC)      http://${CloudIP}:3000   admin / admin123"
+Write-Host "  User Vite       http://${CloudIP}:3001/portal/"
+Write-Host "  User portal     http://${CloudIP}:8080/portal/   (after auth)"
+Write-Host "  Captive entry   phone -> NDS-WiFi -> http://home.me"
+Write-Host "  Cloud API       http://${CloudIP}:8080"
