@@ -78,7 +78,7 @@ uci commit
 
 > 完整清单以 `scripts/configure-newifi-router.sh` 和固件内 `99-nds-profile` 为准；上面只列常改项。
 > 生产服务器应使用真实域名与 HTTPS，并在构建/首配时写入 `NDS_CLOUD_SCHEME`、`NDS_CLOUD_HOST`、`NDS_CLOUD_PORT`、`NDS_DEVICE_ID`、`NDS_DEVICE_SECRET`。
-> 实验室云端在 LAN 侧电脑 `192.168.1.125:8080` 时，才使用 `CLOUD_ZONE=lan` 与 guest-to-LAN NAT；生产云端在 WAN/公网侧时不要开启这条 LAN NAT。
+> 实验室云端在 LAN 侧电脑 `192.168.1.125:8080` 且该电脑同时作为上游 NAT 时，才使用 `CLOUD_ZONE=lan`、guest-to-LAN forwarding 与 guest-to-LAN NAT；配置会先放行云端必要端口，再阻断 guest 直接访问 `192.168.1.0/24` LAN 私网。生产云端在 WAN/公网侧时不要开启这组 LAN 转发/NAT。
 > `/api/v1/device/register` 默认关闭，只有明确设置 `ALLOW_DEVICE_REGISTER=1` 或配置一次性 `DEVICE_REGISTER_TOKEN` 时才允许注册设备，避免服务器上线后被任意设备写入。
 > 批量刷固件不能共用实验室 `NewWiFI` / `nds-newifi-secret-16chars`。固件默认会用本机 MAC 生成 `NewWiFI-<mac>` 形式的设备 ID，并生成随机 `device_secret` 写入 `/etc/config/nds-agent`；openNDS `gatewayname` 也默认使用同一个唯一 `device_id`。服务器端必须按每台设备的实际 `device_id` / `device_secret` 建档，或在受控时间窗口用 `DEVICE_REGISTER_TOKEN` 完成注册。
 
@@ -99,6 +99,14 @@ python scripts/apply-home-me-status.py      # 下发 home.me 中文状态页
 ```
 
 `apply-newifi-setup.py` 会优先读取当前环境的 `NDS_FAS_KEY`，未设置时读取 `cloud/.env` 的 `FAS_KEY` 并传给路由器；如果是全新路由且未显式设置 `NDS_DEVICE_SECRET`，路由端会生成随机密钥，之后必须用 `scripts/register-router-device.py` 注册到云端。
+
+如果实验室路由的默认网关指向 PC `192.168.1.125`，手机认证后仍打不开外网，必须在 Windows 管理员 PowerShell 中开启 PC 转发/NAT：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\enable-pc-uplink.ps1
+```
+
+验收时应看到 `OpenWrtLab` NAT 存在，并且上联网卡和 `192.168.1.125` 所在以太网的 IPv4 `Forwarding` 均为 `Enabled`。生产部署不建议依赖 PC NAT；应让路由 WAN 直接接真实上游或把云端部署到公网/可达内网。
 
 访客 WiFi 网段为 `192.168.100.0/24`（网关 `192.168.100.1`）；管理 LAN 可能是 `192.168.10.1`。手机状态页地址：`http://home.me`。
 

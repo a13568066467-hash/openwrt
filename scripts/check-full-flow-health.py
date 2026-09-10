@@ -398,7 +398,8 @@ uci -q get nds-agent.main.cloud_url | sed 's/^/agent_cloud_url=/'
 uci -q get nds-agent.main.device_id | sed 's/^/agent_device_id=/'
 uci -q get nds-agent.main.device_secret >/dev/null 2>&1 && echo agent_device_secret_present=1 || echo agent_device_secret_present=0
 uci -q get nds-agent.main.report_interval | sed 's/^/agent_report_interval=/'
-uci -q get firewall.guest_to_lan.dest | sed 's/^/guest_to_lan_dest=/'
+if uci -q get firewall.guest_to_lan.dest >/dev/null 2>&1; then echo guest_to_lan_present=1; else echo guest_to_lan_present=0; fi
+if uci -q get firewall.block_guest_lan_private.target >/dev/null 2>&1; then echo guest_lan_private_block=1; else echo guest_lan_private_block=0; fi
 uci -q get firewall.guest_to_lan_nat.target | sed 's/^/guest_nat_target=/'
 """
     )
@@ -415,7 +416,8 @@ uci -q get firewall.guest_to_lan_nat.target | sed 's/^/guest_nat_target=/'
     check("router agent device id", f"agent_device_id={DEVICE_ID}" in router_out)
     check("router agent secret present", "agent_device_secret_present=1" in router_out)
     check("router agent report interval", "agent_report_interval=30" in router_out)
-    check("router guest to lan", "guest_to_lan_dest=lan" in router_out)
+    check("router guest to lan lab forwarding", "guest_to_lan_present=1" in router_out)
+    check("router guest lan private block", "guest_lan_private_block=1" in router_out)
     check("router guest nat", "guest_nat_target=MASQUERADE" in router_out)
 
     if failures:

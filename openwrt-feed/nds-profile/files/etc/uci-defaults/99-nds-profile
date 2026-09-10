@@ -120,11 +120,17 @@ EOF
 
 if [ "$CLOUD_ZONE" = "lan" ]; then
 	uci -q batch <<EOF
-delete firewall.guest_to_lan
+delete firewall.block_guest_lan_private
+set firewall.block_guest_lan_private=rule
+set firewall.block_guest_lan_private.name='Block-Guest-LAN-Private'
+set firewall.block_guest_lan_private.src='guest'
+set firewall.block_guest_lan_private.dest='lan'
+set firewall.block_guest_lan_private.dest_ip='${LAN_IP%.*}.0/24'
+set firewall.block_guest_lan_private.family='ipv4'
+set firewall.block_guest_lan_private.target='REJECT'
 set firewall.guest_to_lan=forwarding
 set firewall.guest_to_lan.src='guest'
 set firewall.guest_to_lan.dest='lan'
-
 delete firewall.guest_to_lan_nat
 set firewall.guest_to_lan_nat=nat
 set firewall.guest_to_lan_nat.name='Guest-to-LAN-Masquerade'
@@ -135,6 +141,7 @@ set firewall.guest_to_lan_nat.family='ipv4'
 EOF
 else
 	uci -q delete firewall.guest_to_lan
+	uci -q delete firewall.block_guest_lan_private
 	uci -q delete firewall.guest_to_lan_nat
 fi
 

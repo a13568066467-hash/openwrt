@@ -103,8 +103,16 @@ uci set firewall.allow_cloud_guest.dest_port='8080 8443 3000 3001'
 uci set firewall.allow_cloud_guest.family='ipv4'
 uci set firewall.allow_cloud_guest.target='ACCEPT'
 
-uci -q delete firewall.guest_to_lan
-uci set firewall.guest_to_lan='forwarding'
+uci -q delete firewall.block_guest_lan_private
+uci set firewall.block_guest_lan_private=rule
+uci set firewall.block_guest_lan_private.name='Block-Guest-LAN-Private'
+uci set firewall.block_guest_lan_private.src='guest'
+uci set firewall.block_guest_lan_private.dest='lan'
+uci set firewall.block_guest_lan_private.dest_ip='192.168.1.0/24'
+uci set firewall.block_guest_lan_private.family='ipv4'
+uci set firewall.block_guest_lan_private.target='REJECT'
+
+uci set firewall.guest_to_lan=forwarding
 uci set firewall.guest_to_lan.src='guest'
 uci set firewall.guest_to_lan.dest='lan'
 
