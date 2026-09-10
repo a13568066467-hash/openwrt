@@ -31,11 +31,13 @@ func spaHandler(dir string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rel := strings.TrimPrefix(path.Clean("/"+r.URL.Path), "/")
 		if rel == "" || rel == "." {
+			w.Header().Set("Cache-Control", "no-store")
 			http.ServeFile(w, r, index)
 			return
 		}
 		target := filepath.Join(dir, filepath.FromSlash(rel))
 		if _, err := os.Stat(target); err != nil {
+			w.Header().Set("Cache-Control", "no-store")
 			http.ServeFile(w, r, index)
 			return
 		}

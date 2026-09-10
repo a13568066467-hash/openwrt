@@ -28,6 +28,8 @@ export default function UsagePage() {
   const { data: profile } = useQuery({
     queryKey: ['profile'],
     queryFn: () => userApi.getProfile().then(r => r.data),
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
   });
   const { data, isLoading } = useQuery({
     queryKey: ['redeemed-vouchers'],

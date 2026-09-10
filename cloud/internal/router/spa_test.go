@@ -34,10 +34,16 @@ func TestUserPortalSPA(t *testing.T) {
 	if rec.Code != http.StatusOK || rec.Body.String() != "<html>portal-home</html>" {
 		t.Fatalf("index status=%d body=%s", rec.Code, rec.Body.String())
 	}
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("index cache-control=%q", got)
+	}
 
 	rec2 := httptest.NewRecorder()
 	h.ServeHTTP(rec2, httptest.NewRequest(http.MethodGet, "/portal/login", nil))
 	if rec2.Code != http.StatusOK || rec2.Body.String() != "<html>portal-home</html>" {
 		t.Fatalf("spa fallback status=%d body=%s", rec2.Code, rec2.Body.String())
+	}
+	if got := rec2.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("fallback cache-control=%q", got)
 	}
 }

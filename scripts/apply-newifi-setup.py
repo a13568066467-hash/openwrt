@@ -18,7 +18,7 @@ CERT = CLOUD / "data" / "dev.crt"
 
 ROUTER_HOST = os.environ.get("NDS_ROUTER_HOST", "192.168.1.1")
 ROUTER_USER = os.environ.get("NDS_ROUTER_USER", "root")
-ROUTER_PASS = os.environ.get("NDS_ROUTER_PASS", "1234567890")
+ROUTER_PASS = os.environ.get("NDS_ROUTER_PASSWORD") or os.environ["NDS_ROUTER_PASS"]
 CLOUD_IP = os.environ.get("NDS_CLOUD_IP", "192.168.1.125")
 
 
@@ -142,6 +142,12 @@ def restart_cloud() -> None:
 def configure_router() -> str:
     if not ROUTER_SH.is_file():
         raise FileNotFoundError(ROUTER_SH)
+    env_file = load_env_file(CLOUD / ".env")
+    fas_key = os.environ.get("NDS_FAS_KEY") or env_file.get("FAS_KEY")
+    if not fas_key:
+        raise RuntimeError("NDS_FAS_KEY is required and cloud/.env has no FAS_KEY")
+    device_id = os.environ.get("NDS_DEVICE_ID", "NewWiFI")
+    device_secret = os.environ.get("NDS_DEVICE_SECRET", "")
 
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -164,10 +170,14 @@ def configure_router() -> str:
             + script
         )
 
-    stdin, stdout, stderr = client.exec_command(
-        f"export NDS_CLOUD_IP={CLOUD_IP}; sh -s",
-        timeout=300,
-    )
+    exports = [
+        f"export NDS_CLOUD_IP={sh_quote(CLOUD_IP)}",
+        f"export NDS_FAS_KEY={sh_quote(fas_key)}",
+        f"export NDS_DEVICE_ID={sh_quote(device_id)}",
+    ]
+    if device_secret:
+        exports.append(f"export NDS_DEVICE_SECRET={sh_quote(device_secret)}")
+    stdin, stdout, stderr = client.exec_command("; ".join(exports) + "; sh -s", timeout=300)
     stdin.write(script)
     stdin.channel.shutdown_write()
     out = stdout.read().decode("utf-8", errors="replace")
@@ -183,6 +193,10 @@ def probe_cloud() -> None:
     print("health", wait_http("http://127.0.0.1:8080/health", 10))
     print("fas", wait_http("http://127.0.0.1:8080/fas", 10))
     print("portal", wait_http("http://127.0.0.1:8080/portal/", 10))
+
+
+def sh_quote(value: str) -> str:
+    return "'" + value.replace("'", "'\"'\"'") + "'"
 
 
 def ssh_run(cmd: str, timeout: int = 60) -> str:

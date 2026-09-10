@@ -257,8 +257,13 @@ body() {
 </form>"
 
 	elif [ "$status" = "err511" ]; then
+		login_url="$url/login"
+		if [ -n "$b64query" ]; then
+			b64query_url=$(printf '%s' "$b64query" | sed 's/+/%2B/g; s/\//%2F/g; s/=/%3D/g')
+			login_url="$login_url?fas=$b64query_url"
+		fi
 		echo "<p class=\"msg\">需要先完成上网认证后才能使用网络</p>
-<form action=\"$url/login\" method=\"get\" target=\"_blank\">
+	<form action=\"$login_url\" method=\"get\">
 <div class=\"actions\"><button class=\"btn btn-primary\" type=\"submit\">继续登录</button></div>
 </form>"
 	else

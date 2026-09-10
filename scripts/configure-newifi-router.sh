@@ -3,8 +3,14 @@
 set -e
 
 CLOUD_IP="${NDS_CLOUD_IP:-192.168.1.125}"
-DEVICE_ID="${NDS_DEVICE_ID:-NDS-Billing-Gateway}"
-DEVICE_SECRET="${NDS_DEVICE_SECRET:-nds-qemu-secret-16}"
+DEVICE_ID="${NDS_DEVICE_ID:-NewWiFI}"
+DEVICE_SECRET="${NDS_DEVICE_SECRET:-}"
+# Must match cloud FAS_KEY — level-1 opennds_auth verifies tok=sha256(hid+faskey).
+FAS_KEY="${NDS_FAS_KEY:?NDS_FAS_KEY must match cloud FAS_KEY}"
+
+if [ -z "$DEVICE_SECRET" ]; then
+	DEVICE_SECRET="$(dd if=/dev/urandom bs=16 count=1 2>/dev/null | hexdump -ve '1/1 "%02x"')"
+fi
 
 echo "=== NDS router configure cloud=$CLOUD_IP ==="
 
@@ -36,6 +42,12 @@ uci set dhcp.guest.dhcpv6='disabled'
 uci set dhcp.guest.ndp='disabled'
 uci delete dhcp.guest.dhcp_option_force 2>/dev/null || true
 uci add_list dhcp.guest.dhcp_option_force='114,http://home.me'
+uci -q del_list dhcp.@dnsmasq[0].address='/home.me/192.168.100.1'
+uci add_list dhcp.@dnsmasq[0].address='/home.me/192.168.100.1'
+
+# The lab flow is IPv4 captive-portal only. Leaving wan6 half-configured causes
+# repeated firewall4 reloads on this hardware and drops openNDS nft rules.
+uci set network.wan6.disabled='1'
 
 # --- Guest WiFi ---
 uci set wireless.guest_radio0=wifi-iface
@@ -91,12 +103,28 @@ uci set firewall.allow_cloud_guest.dest_port='8080 8443 3000 3001'
 uci set firewall.allow_cloud_guest.family='ipv4'
 uci set firewall.allow_cloud_guest.target='ACCEPT'
 
-# --- openNDS FAS level 4 ---
+uci -q delete firewall.guest_to_lan
+uci set firewall.guest_to_lan='forwarding'
+uci set firewall.guest_to_lan.src='guest'
+uci set firewall.guest_to_lan.dest='lan'
+
+# SNAT guest traffic when the upstream gateway is reachable via LAN (for PC-hosted lab/FAS).
+uci -q delete firewall.guest_to_lan_nat
+uci set firewall.guest_to_lan_nat='nat'
+uci set firewall.guest_to_lan_nat.name='Guest-to-LAN-Masquerade'
+uci set firewall.guest_to_lan_nat.src='lan'
+uci set firewall.guest_to_lan_nat.src_ip='192.168.100.0/24'
+uci set firewall.guest_to_lan_nat.target='MASQUERADE'
+uci set firewall.guest_to_lan_nat.family='ipv4'
+
+# --- openNDS FAS ---
+# Lab uses level 1 (browser redirects to opennds_auth), matching the shipped
+# nds-profile default. See docs/deployment.md.
 [ -n "$(uci -q get opennds.@opennds[0])" ] || uci add opennds opennds
 
 uci set opennds.@opennds[0].enabled='1'
 uci set opennds.@opennds[0].gatewayinterface='br-guest'
-uci set opennds.@opennds[0].gatewayname='NewWiFI'
+uci set opennds.@opennds[0].gatewayname="$DEVICE_ID"
 uci set opennds.@opennds[0].gatewayfqdn='home.me'
 uci set opennds.@opennds[0].statuspath='/usr/lib/nds-hooks/client_status.sh'
 uci set opennds.@opennds[0].fas_secure_enabled='1'
@@ -104,6 +132,7 @@ uci set opennds.@opennds[0].fasport='8080'
 uci set opennds.@opennds[0].faspath='/fas'
 uci delete opennds.@opennds[0].fasremotefqdn 2>/dev/null || true
 uci set opennds.@opennds[0].fasremoteip="$CLOUD_IP"
+uci set opennds.@opennds[0].faskey="$FAS_KEY"
 uci delete opennds.@opennds[0].walledgarden_fqdn_list 2>/dev/null || true
 uci add_list opennds.@opennds[0].walledgarden_fqdn_list="$CLOUD_IP"
 uci delete opennds.@opennds[0].walledgarden_port_list 2>/dev/null || true
@@ -113,7 +142,7 @@ uci add_list opennds.@opennds[0].walledgarden_port_list='3001'
 uci set opennds.@opennds[0].binauth='/usr/lib/nds-hooks/binauth.sh'
 uci set opennds.@opennds[0].sessiontimeout='0'
 uci set opennds.@opennds[0].checkinterval='5'
-uci set opennds.@opennds[0].fwhook_enabled='0'
+uci set opennds.@opennds[0].fwhook_enabled='1'
 
 uci -q delete opennds.@opennds[0].users_to_router
 uci add_list opennds.@opennds[0].users_to_router='allow tcp port 53'
@@ -126,6 +155,7 @@ uci set nds-agent.main.cloud_url="http://${CLOUD_IP}:8080"
 uci set nds-agent.main.device_id="$DEVICE_ID"
 uci set nds-agent.main.device_secret="$DEVICE_SECRET"
 uci set nds-agent.main.insecure_tls='1'
+uci set nds-agent.main.report_interval='30'
 
 uci commit network
 uci commit dhcp

@@ -88,6 +88,8 @@ export default function HomePage() {
   const { data: user, isLoading } = useQuery({
     queryKey: ['profile'],
     queryFn: () => userApi.getProfile().then(r => r.data),
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
   });
 
   const remaining = user?.quota_remaining_bytes ?? 0;

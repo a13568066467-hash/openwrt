@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/glebarez/sqlite"
+	"github.com/nds-billing/cloud/internal/config"
 	"github.com/nds-billing/cloud/internal/database"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -50,7 +51,7 @@ func newTestHandler(t *testing.T) (*Handler, *gorm.DB, database.Router, database
 		Active:     true,
 	})
 
-	return NewHandler(db), db, router, user
+	return NewHandler(db, &config.Config{}), db, router, user
 }
 
 func postJSON(t *testing.T, h http.HandlerFunc, body any) *httptest.ResponseRecorder {
@@ -270,6 +271,46 @@ func TestHeartbeatMarksRouterOnline(t *testing.T) {
 	}
 	if stored.LastHeartbeat == nil {
 		t.Error("last_heartbeat was not recorded")
+	}
+}
+
+func TestRegisterDisabledByDefault(t *testing.T) {
+	h, _, _, _ := newTestHandler(t)
+
+	rec := postJSON(t, h.Register, map[string]any{
+		"device_id": "router-2",
+		"name":      "router",
+		"secret":    deviceSecret,
+	})
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 when device registration is disabled, got %d", rec.Code)
+	}
+}
+
+func TestRegisterAllowsConfiguredToken(t *testing.T) {
+	h, db, _, _ := newTestHandler(t)
+	h.cfg = &config.Config{DeviceRegisterToken: "provision-token"}
+
+	encoded, err := json.Marshal(map[string]any{
+		"device_id": "router-2",
+		"name":      "router",
+		"secret":    deviceSecret,
+	})
+	if err != nil {
+		t.Fatalf("encode request: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/device/register", bytes.NewReader(encoded))
+	req.Header.Set("X-Device-Register-Token", "provision-token")
+	rec := httptest.NewRecorder()
+
+	h.Register(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 with provisioning token, got %d (%s)", rec.Code, rec.Body.String())
+	}
+
+	var stored database.Router
+	if err := db.Where("device_id = ?", "router-2").First(&stored).Error; err != nil {
+		t.Fatalf("router was not registered: %v", err)
 	}
 }
 

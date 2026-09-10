@@ -1,5 +1,5 @@
-﻿# Lab one-shot: Docker + cloud + admin/user frontends + router pair
-# Saved as UTF-8 with BOM for Windows PowerShell 5.x Chinese safety.
+# Lab one-shot: Docker + cloud + admin/user frontends + router pair
+# ASCII-only on purpose: PowerShell 5.x mis-decodes BOM-less UTF-8 Chinese.
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $Cloud = Join-Path $Root "cloud"
@@ -18,6 +18,19 @@ function Import-DotEnv([string]$Path) {
 function Test-Port([int]$Port) {
   $line = netstat -ano | Select-String ":$Port\s+.*LISTENING"
   return [bool]$line
+}
+
+function Test-CloudHealth {
+  try {
+    $health = Invoke-RestMethod -Uri "http://${CloudIP}:8080/health" -TimeoutSec 5
+    if ($health.status -ne "ok") { return $false }
+    if ($health.database -ne "ok") { return $false }
+    if ($health.database_target -notlike "*localhost:3307*") { return $false }
+    if ($health.user_portal_url -ne "http://${CloudIP}:8080/portal/") { return $false }
+    return $true
+  } catch {
+    return $false
+  }
 }
 
 function Ensure-Firewall([int]$Port) {
@@ -63,10 +76,13 @@ $env:USER_PORTAL_URL = "http://${CloudIP}:8080/portal/"
 $env:USER_WEB_DIR = Join-Path $Root "user-web\dist"
 
 Write-Host "=== 1/5 Docker MySQL / Redis ==="
-docker info *> $null
-if ($LASTEXITCODE -ne 0) { throw "Start Docker Desktop first." }
+cmd /c "docker info 1>nul 2>nul"
+if ($LASTEXITCODE -ne 0) {
+  throw "Docker Desktop is not running. Start it, wait until it is ready, then re-run start-lab.ps1."
+}
 Push-Location $Cloud
 docker compose up -d
+if ($LASTEXITCODE -ne 0) { Pop-Location; throw "docker compose up failed." }
 $ready = $false
 for ($i = 0; $i -lt 45; $i++) {
   # mysqladmin prints a password warning on stderr; do not treat it as fatal.
@@ -94,6 +110,9 @@ if (-not (Test-Port 8080)) {
   }
 }
 if (-not (Test-Port 8080)) { throw "cloud is not listening on 8080." }
+if (-not (Test-CloudHealth)) {
+  throw "cloud health check failed or 8080 is running with the wrong database/portal config. Stop the stale 8080 process and re-run."
+}
 
 Write-Host "=== 4/5 Admin :3000 / User Vite :3001 ==="
 if (-not (Test-Port 3000)) {

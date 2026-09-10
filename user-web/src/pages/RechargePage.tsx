@@ -9,10 +9,13 @@ export default function RechargePage() {
   const qc = useQueryClient();
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
+  const [reauthReady, setReauthReady] = useState(false);
 
   const { data: user, isLoading } = useQuery({
     queryKey: ['profile'],
     queryFn: () => userApi.getProfile().then(r => r.data),
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
   });
 
   const handleRedeem = async () => {
@@ -27,6 +30,7 @@ export default function RechargePage() {
       const { data } = await userApi.redeemVoucher(normalized);
       Toast.show({ icon: 'success', content: `充值成功！余额 ${formatBytes(data.balance_bytes)}` });
       setCode('');
+      setReauthReady(true);
       qc.invalidateQueries({ queryKey: ['profile'] });
       qc.invalidateQueries({ queryKey: ['redeemed-vouchers'] });
     } catch (err: unknown) {
@@ -84,6 +88,16 @@ export default function RechargePage() {
           >
             {loading ? '充值中…' : '立即充值'}
           </button>
+          {reauthReady && (
+            <button
+              type="button"
+              className="btn-gradient"
+              style={{ marginTop: 12 }}
+              onClick={() => { window.location.href = 'http://home.me'; }}
+            >
+              重新认证上网
+            </button>
+          )}
         </div>
 
         <div className="surface-card surface-card--soft">

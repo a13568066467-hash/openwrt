@@ -118,8 +118,26 @@ func writeHTML(w http.ResponseWriter, body string) {
 
 func (h *Handler) renderPortal(w http.ResponseWriter, _ *FASParams, fasEncoded, errMsg string) {
 	errHTML := ""
+	autoTokenHTML := ""
 	if errMsg != "" {
 		errHTML = fmt.Sprintf(`<div class="error">%s</div>`, html.EscapeString(errMsg))
+	} else {
+		autoTokenHTML = fmt.Sprintf(`
+    <form id="token-login" method="POST" style="display:none">
+      <input type="hidden" name="fas" value="%s">
+      <input type="hidden" name="action" value="token">
+      <input type="hidden" id="portal-token" name="token" value="">
+    </form>
+    <script>
+    (function(){
+      try {
+        var token = localStorage.getItem('user_token');
+        if (!token) return;
+        document.getElementById('portal-token').value = token;
+        document.getElementById('token-login').submit();
+      } catch (e) {}
+    })();
+    </script>`, html.EscapeString(fasEncoded))
 	}
 	fas := html.EscapeString(fasEncoded)
 	writeHTML(w, fmt.Sprintf(`<!DOCTYPE html>
@@ -156,9 +174,10 @@ func (h *Handler) renderPortal(w http.ResponseWriter, _ *FASParams, fasEncoded, 
       </form>
     </details>
     <p class="hint">认证通过后将自动开通本机上网，并进入用户中心</p>
+    %s
   </div>
 </div>
-</body></html>`, portalCSS, errHTML, fas, fas))
+</body></html>`, portalCSS, errHTML, fas, fas, autoTokenHTML))
 }
 
 func (h *Handler) renderSuccess(w http.ResponseWriter, r *http.Request, params *FASParams, user *database.User, rhid, customB64 string) {

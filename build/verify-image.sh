@@ -44,6 +44,7 @@ present /etc/init.d/nds-agent
 echo
 echo "=== hook and profile ==="
 present /usr/lib/nds-hooks/binauth.sh
+present /usr/lib/nds-profile/ensure-guest-dhcp.sh
 present /etc/uci-defaults/99-nds-profile
 
 echo
@@ -73,7 +74,13 @@ echo
 echo "=== configuration content ==="
 contains /etc/init.d/nds-agent "ucode -R /usr/lib/nds-agent/main.uc" "init runs ucode in raw mode"
 contains /etc/uci-defaults/99-nds-profile "/usr/lib/nds-hooks/binauth.sh" "profile points binauth at our hook"
-contains /etc/uci-defaults/99-nds-profile "fas_secure_enabled='4'" "openNDS configured for FAS level 4"
+contains /etc/uci-defaults/99-nds-profile "fas_secure_enabled='1'" "openNDS configured for FAS level 1"
+contains /etc/uci-defaults/99-nds-profile "fwhook_enabled='1'" "openNDS firewall hook enabled"
+contains /etc/uci-defaults/99-nds-profile "gatewayname='\${DEVICE_ID}'" "openNDS gateway name follows unique device id"
+contains /etc/uci-defaults/99-nds-profile "cloud_url='\${CLOUD_SCHEME}://\${CLOUD_HOST}:\${CLOUD_PORT}'" "agent cloud URL comes from build/runtime vars"
+contains /etc/uci-defaults/99-nds-profile "device_id='\${DEVICE_ID}'" "agent device id is provisioned"
+contains /etc/uci-defaults/99-nds-profile "device_secret='\${DEVICE_SECRET}'" "agent device secret is provisioned"
+contains /etc/uci-defaults/99-nds-profile "report_interval='30'" "agent reports every 30 seconds"
 contains /etc/uci-defaults/99-nds-profile "Allow-DHCP-Guest" "guest zone permits DHCP"
 contains /etc/uci-defaults/99-nds-profile "Allow-DNS-Guest" "guest zone permits DNS"
 contains /etc/uci-defaults/99-nds-profile "ra='disabled'" "guest IPv6 router advertisements off"

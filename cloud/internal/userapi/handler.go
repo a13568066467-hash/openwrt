@@ -95,18 +95,12 @@ func (h *Handler) GetDevices(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GetUsage(w http.ResponseWriter, r *http.Request) {
 	userID := auth.GetUserID(r.Context())
-	var devices []database.UserDevice
-	h.db.Where("user_id = ?", userID).Find(&devices)
-
-	var macs []string
-	for _, d := range devices {
-		macs = append(macs, d.MAC)
-	}
-
 	var records []database.UsageRecord
-	if len(macs) > 0 {
-		h.db.Where("mac IN ?", macs).Order("id desc").Limit(100).Find(&records)
-	}
+	h.db.Joins("JOIN sessions ON sessions.session_key = usage_records.session_key").
+		Where("sessions.user_id = ?", userID).
+		Order("usage_records.id desc").
+		Limit(100).
+		Find(&records)
 	json.NewEncoder(w).Encode(records)
 }
 

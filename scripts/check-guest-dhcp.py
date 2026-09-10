@@ -4,15 +4,21 @@ from __future__ import annotations
 
 import os
 import sys
+import logging
+import warnings
+
+warnings.filterwarnings("ignore", message=".*Blowfish has been deprecated.*")
 
 import paramiko
 
+logging.getLogger("paramiko").setLevel(logging.CRITICAL)
+
 HOSTS = [
-    os.environ.get("NDS_ROUTER_HOST", "192.168.10.1"),
-    "192.168.1.1",
+    os.environ.get("NDS_ROUTER_HOST", "192.168.1.1"),
+    "192.168.10.1",
 ]
 USER = os.environ.get("NDS_ROUTER_USER", "root")
-PASSWORD = os.environ.get("NDS_ROUTER_PASS", "1234567890")
+PASSWORD = os.environ.get("NDS_ROUTER_PASS") or os.environ.get("NDS_ROUTER_PASSWORD", "1234567890")
 
 REMOTE = r"""
 set +e

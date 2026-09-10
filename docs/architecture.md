@@ -4,7 +4,7 @@
 
 | 组件 | 技术 | 职责 |
 |------|------|------|
-| openNDS | C + shell | Captive Portal 认证（FAS level 4） |
+| openNDS | C + shell | Captive Portal 认证（FAS level 1） |
 | nds-agent | ucode | 合计配额判定、用量上报、云端同步 |
 | nds-hooks | shell | BinAuth 授权参数回填与事件记录 |
 | nds-profile | UCI | 默认网络 / 防火墙 / openNDS 配置 |
@@ -15,9 +15,9 @@
 ## 数据流
 
 1. 客户端连 WiFi → CPD 探测 → openNDS 302 跳转到云端 FAS
-2. 用户登录/注册 → 云端写入 auth 队列并创建活跃会话 → authmon 轮询拉取 → openNDS 放行
+2. 用户登录/注册 → 云端创建活跃会话 → 浏览器经 `opennds_auth` 放行 → 回跳用户中心
 3. nds-agent 每 5 秒采样 `ndsctl json`，按上下行合计判定，超额立即 deauth
-4. nds-agent 每 60 秒上报增量 → 云端扣减额度 → 回传 `quota_updates` 与待执行指令
+4. nds-agent 每 30 秒上报增量 → 云端扣减额度 → 回传 `quota_updates` 与待执行指令
 
 ## 部署拓扑
 
@@ -46,8 +46,9 @@ Internet
 ### 计费语义
 
 - **openNDS 的配额是上下行独立的**，而产品卖的是合计流量，所以合计判定由 nds-agent 实现；下发给 openNDS 的上下行配额只作为兜底。
-- **消费扣至零而非拒绝**。路由器每 60 秒才上报一次，最后一笔增量几乎必然超出余额；若整笔拒绝，这些已经跑掉的流量既不计费也永远触发不了断网。管理员手动扣减则相反，余额不足会直接失败。
+- **消费扣至零而非拒绝**。路由器按配置周期上报增量，最后一笔增量可能超出余额；若整笔拒绝，这些已经跑掉的流量既不计费也永远触发不了断网。管理员手动扣减则相反，余额不足会直接失败。
 - **流量归属按活跃会话而非 MAC 绑定表**。同一个 MAC 可能先后绑定过多个账户，只按 MAC 查会扣错人。
+- **用户用量查询按 session 归属过滤**。同一手机 MAC 换账号后，旧账号 session 的历史 `usage_records` 不能暴露给新账号。
 - **幂等键 `(session_key, seq)`** 由数据库唯一索引保证；`seq` 在路由器侧持久化，重启不重置。
 
 ### 断网降级

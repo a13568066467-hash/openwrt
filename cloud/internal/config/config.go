@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 )
 
 type Config struct {
@@ -20,9 +21,13 @@ type Config struct {
 	DefaultDownloadRate int
 	UserPortalURL       string
 	UserWebDir          string
+	AllowDeviceRegister bool
+	DeviceRegisterToken string
 }
 
 func Load() *Config {
+	loadDotEnv()
+
 	return &Config{
 		HTTPPort:            getEnvInt("HTTP_PORT", 8080),
 		HTTPSPort:           getEnvInt("HTTPS_PORT", 8443),
@@ -38,6 +43,34 @@ func Load() *Config {
 		DefaultDownloadRate: getEnvInt("DEFAULT_DOWNLOAD_RATE", 0),
 		UserPortalURL:       getEnv("USER_PORTAL_URL", ""),
 		UserWebDir:          getEnv("USER_WEB_DIR", ""),
+		AllowDeviceRegister: getEnv("ALLOW_DEVICE_REGISTER", "0") == "1",
+		DeviceRegisterToken: getEnv("DEVICE_REGISTER_TOKEN", ""),
+	}
+}
+
+func loadDotEnv() {
+	for _, path := range []string{".env", "cloud/.env"} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			key, value, ok := strings.Cut(line, "=")
+			if !ok {
+				continue
+			}
+			key = strings.TrimSpace(key)
+			value = strings.Trim(strings.TrimSpace(value), `"'`)
+			if key == "" || os.Getenv(key) != "" {
+				continue
+			}
+			os.Setenv(key, value)
+		}
+		return
 	}
 }
 

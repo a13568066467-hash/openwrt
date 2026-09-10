@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -32,7 +33,7 @@ func New(db *gorm.DB, cfg *config.Config) http.Handler {
 
 	jwtSvc := auth.NewJWTService(cfg.JWTSecret)
 	fasHandler := fas.NewHandler(db, cfg, jwtSvc)
-	deviceHandler := device.NewHandler(db)
+	deviceHandler := device.NewHandler(db, cfg)
 	adminHandler := admin.NewHandler(db, jwtSvc)
 	userHandler := userapi.NewHandler(db, jwtSvc)
 	voucherSvc := voucher.New(db)
@@ -114,7 +115,20 @@ func New(db *gorm.DB, cfg *config.Config) http.Handler {
 	})
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"status":"ok"}`))
+		dbStatus := "ok"
+		if sqlDB, err := db.DB(); err != nil {
+			dbStatus = "unavailable"
+		} else if err := sqlDB.Ping(); err != nil {
+			dbStatus = "error"
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"status":                      "ok",
+			"database":                    dbStatus,
+			"database_target":             safeDatabaseTarget(cfg.DatabaseDSN),
+			"user_portal_url":             cfg.UserPortalURL,
+			"device_registration_enabled": cfg.AllowDeviceRegister || cfg.DeviceRegisterToken != "",
+		})
 	})
 
 	r.Get("/api/v1/branding", func(w http.ResponseWriter, r *http.Request) {
@@ -129,4 +143,14 @@ func New(db *gorm.DB, cfg *config.Config) http.Handler {
 	mountUserPortal(r, cfg.UserWebDir)
 
 	return r
+}
+
+func safeDatabaseTarget(dsn string) string {
+	if at := strings.LastIndex(dsn, "@"); at >= 0 {
+		dsn = dsn[at+1:]
+	}
+	if q := strings.Index(dsn, "?"); q >= 0 {
+		dsn = dsn[:q]
+	}
+	return dsn
 }

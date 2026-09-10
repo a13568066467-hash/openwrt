@@ -102,17 +102,17 @@ heal_guest_bridge() {
 restart_dhcp_stack() {
 	/etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
 	sleep 2
-	# openNDS binds gatewayinterface; restart only if enabled and bridge has an IP.
-	if [ "$(uci -q get opennds.@opennds[0].enabled)" = "1" ] && guest_has_ip; then
+	# openNDS binds gatewayinterface; restart only when service is enabled.
+	if [ "$(uci -q get opennds.@opennds[0].enabled)" = "1" ]; then
 		/etc/init.d/opennds restart >/dev/null 2>&1 || true
 	fi
 }
 
 needs_heal() {
-	guest_has_ip || return 0
-	guest_dhcp_range_present || return 0
-	pidof dnsmasq >/dev/null 2>&1 || return 0
-	return 1
+	guest_has_ip || return 1
+	guest_dhcp_range_present || return 1
+	pidof dnsmasq >/dev/null 2>&1 || return 1
+	return 0
 }
 
 # Serialize concurrent hotplug/watchdog calls.
@@ -124,7 +124,8 @@ fi
 
 ensure_dhcp_force
 
-if ! needs_heal; then
+if needs_heal; then
+	log "guest DHCP healthy: $(ip -4 addr show br-guest 2>/dev/null | awk '/inet /{print $2; exit}')"
 	exit 0
 fi
 

@@ -7,7 +7,7 @@ import socket
 import time
 from pathlib import Path
 
-LOCAL = "192.168.1.2"
+LOCAL = "192.168.1.125"
 HOST = "192.168.1.1"
 FW = (
     Path(__file__).resolve().parents[1]
@@ -94,8 +94,8 @@ def main() -> int:
     except OSError as e:
         print(f"upgrading connection: {e}")
 
-    print("waiting for OpenWrt (up to 4 min)...")
-    deadline = time.time() + 240
+    print("waiting for OpenWrt (up to 7 min)...")
+    deadline = time.time() + 420
     while time.time() < deadline:
         try:
             raw = http("GET", "/", timeout=4)

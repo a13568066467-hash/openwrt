@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nds-billing/cloud/internal/config"
 	"github.com/nds-billing/cloud/internal/database"
 	"github.com/nds-billing/cloud/internal/ledger"
 	"golang.org/x/crypto/bcrypt"
@@ -25,10 +26,11 @@ type credentials struct {
 type Handler struct {
 	db     *gorm.DB
 	ledger *ledger.Service
+	cfg    *config.Config
 }
 
-func NewHandler(db *gorm.DB) *Handler {
-	return &Handler{db: db, ledger: ledger.New(db)}
+func NewHandler(db *gorm.DB, cfg *config.Config) *Handler {
+	return &Handler{db: db, ledger: ledger.New(db), cfg: cfg}
 }
 
 type reportItem struct {
@@ -309,6 +311,21 @@ func (h *Handler) enqueueDeauth(routerID uint, mac string, userID uint) {
 }
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
+	if h.cfg == nil || !h.cfg.AllowDeviceRegister {
+		expected := ""
+		if h.cfg != nil {
+			expected = strings.TrimSpace(h.cfg.DeviceRegisterToken)
+		}
+		got := strings.TrimSpace(r.Header.Get("X-Device-Register-Token"))
+		if got == "" {
+			got = strings.TrimSpace(r.URL.Query().Get("token"))
+		}
+		if expected == "" || got != expected {
+			http.Error(w, "device registration disabled", http.StatusForbidden)
+			return
+		}
+	}
+
 	var req struct {
 		Name     string `json:"name"`
 		DeviceID string `json:"device_id"`

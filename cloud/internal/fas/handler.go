@@ -116,6 +116,12 @@ func (h *Handler) HandleFAS(w http.ResponseWriter, r *http.Request) {
 
 	fasEncoded := r.URL.Query().Get("fas")
 	if fasEncoded == "" {
+		if r.URL.Query().Get("status") == "authenticated" {
+			if redir := strings.TrimSpace(r.URL.Query().Get("redir")); redir != "" {
+				http.Redirect(w, r, redir, http.StatusFound)
+				return
+			}
+		}
 		// openNDS probes the FAS URL at startup. A 400 here makes the
 		// daemon treat the portal as down and refuse to stay running.
 		if r.Method != http.MethodPost {
@@ -215,6 +221,10 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request, params *FA
 		h.handleRegister(w, r, params, username, password)
 		return
 	}
+	if action == "token" {
+		h.handleTokenLogin(w, r, params)
+		return
+	}
 
 	var user database.User
 	fasEncoded := r.FormValue("fas")
@@ -239,6 +249,40 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request, params *FA
 
 	if user.QuotaRemainingBytes <= 0 {
 		// Do not grant network access; send the user to the recharge portal.
+		h.renderQuotaExhausted(w, r, &user)
+		return
+	}
+
+	h.authorizeClient(w, r, params, &user)
+}
+
+func (h *Handler) handleTokenLogin(w http.ResponseWriter, r *http.Request, params *FASParams) {
+	fasEncoded := r.FormValue("fas")
+	if fasEncoded == "" {
+		fasEncoded = r.URL.Query().Get("fas")
+	}
+
+	token := strings.TrimSpace(r.FormValue("token"))
+	if token == "" || h.jwt == nil {
+		h.renderPortal(w, params, fasEncoded, "登录已过期，请重新输入账号密码")
+		return
+	}
+	claims, err := h.jwt.Parse(token)
+	if err != nil || claims.Role != "user" || claims.ID == 0 {
+		h.renderPortal(w, params, fasEncoded, "登录已过期，请重新输入账号密码")
+		return
+	}
+
+	var user database.User
+	if err := h.db.First(&user, claims.ID).Error; err != nil {
+		h.renderPortal(w, params, fasEncoded, "登录已过期，请重新输入账号密码")
+		return
+	}
+	if user.Status != "active" {
+		h.renderPortal(w, params, fasEncoded, "账户已被禁用")
+		return
+	}
+	if user.QuotaRemainingBytes <= 0 {
 		h.renderQuotaExhausted(w, r, &user)
 		return
 	}
@@ -287,13 +331,24 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request, params 
 
 func (h *Handler) bindMAC(userID uint, mac string) {
 	mac = strings.ToLower(mac)
-	var device database.UserDevice
-	err := h.db.Where("user_id = ? AND mac = ?", userID, mac).First(&device).Error
+	if mac == "" {
+		return
+	}
+
+	// A handset can be reused with a different account. Keep ownership
+	// deterministic so "My devices" and usage views do not leak the same MAC
+	// across old accounts after a later login.
+	h.db.Where("mac = ? AND user_id <> ?", mac, userID).Delete(&database.UserDevice{})
+
 	now := time.Now()
-	if err != nil {
+	result := h.db.Model(&database.UserDevice{}).
+		Where("user_id = ? AND mac = ?", userID, mac).
+		Update("last_seen", now)
+	if result.Error != nil {
+		return
+	}
+	if result.RowsAffected == 0 {
 		h.db.Create(&database.UserDevice{UserID: userID, MAC: mac, FirstSeen: now, LastSeen: now})
-	} else {
-		h.db.Model(&device).Update("last_seen", now)
 	}
 }
 
@@ -304,12 +359,12 @@ func (h *Handler) authorizeClient(w http.ResponseWriter, r *http.Request, params
 	quotaC := h.computeAuthQuota(user.QuotaRemainingBytes)
 
 	customData, _ := json.Marshal(map[string]interface{}{
-		"user_id":         user.ID,
-		"sessiontimeout":  0,
-		"upload_rate":     user.UploadRateKbps,
-		"download_rate":   user.DownloadRateKbps,
-		"upload_quota":    quotaC / 1024,
-		"download_quota":  quotaC / 1024,
+		"user_id":        user.ID,
+		"sessiontimeout": 0,
+		"upload_rate":    user.UploadRateKbps,
+		"download_rate":  user.DownloadRateKbps,
+		"upload_quota":   quotaC / 1024,
+		"download_quota": quotaC / 1024,
 	})
 	customB64 := base64.StdEncoding.EncodeToString(customData)
 
@@ -320,11 +375,33 @@ func (h *Handler) authorizeClient(w http.ResponseWriter, r *http.Request, params
 
 	queueDir := h.authQueueDir(params.GatewayName)
 	os.MkdirAll(queueDir, 0700)
+	h.pruneAuthQueue(queueDir, 10*time.Minute)
 	os.WriteFile(filepath.Join(queueDir, rhid), []byte(logLine), 0600)
 
 	// Level 1 FAS: browser must hit gateway authdir with tok=rhid.
 	// Auth queue is still written for level 3/4 authmon.
 	h.renderSuccess(w, r, params, user, rhid, customB64)
+}
+
+func (h *Handler) pruneAuthQueue(queueDir string, maxAge time.Duration) {
+	entries, err := os.ReadDir(queueDir)
+	if err != nil {
+		return
+	}
+
+	cutoff := time.Now().Add(-maxAge)
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		if info.ModTime().Before(cutoff) {
+			os.Remove(filepath.Join(queueDir, entry.Name()))
+		}
+	}
 }
 
 // openSession records who is online where. Usage reports arrive later keyed

@@ -23,7 +23,7 @@ define Package/nds-profile
 endef
 
 define Package/nds-profile/description
-  Default UCI configuration for guest WiFi, openNDS FAS level 4,
+  Default UCI configuration for guest WiFi, openNDS FAS level 1,
   walled garden, and IPv6 disable on guest interface.
 endef
 

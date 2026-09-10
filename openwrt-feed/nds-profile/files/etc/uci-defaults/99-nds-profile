@@ -7,9 +7,19 @@
 
 CLOUD_HOST="${NDS_CLOUD_HOST:-portal.local}"
 CLOUD_PORT="${NDS_CLOUD_PORT:-8443}"
+CLOUD_SCHEME="${NDS_CLOUD_SCHEME:-https}"
+CLOUD_ZONE="${NDS_CLOUD_ZONE:-wan}"
 CLOUD_PATH="${NDS_CLOUD_PATH:-/fas}"
+BASE_MAC="$(cat /sys/class/net/br-lan/address 2>/dev/null || cat /sys/class/net/eth0/address 2>/dev/null || echo unknown)"
+DEVICE_SUFFIX="$(echo "$BASE_MAC" | tr -d ':' | tr 'A-F' 'a-f')"
+DEVICE_ID="${NDS_DEVICE_ID:-NewWiFI-${DEVICE_SUFFIX}}"
+DEVICE_SECRET="${NDS_DEVICE_SECRET:-}"
 GUEST_SSID="${NDS_GUEST_SSID:-NDS-WiFi}"
 GUEST_SUBNET="${NDS_GUEST_SUBNET:-192.168.100.1}"
+
+if [ -z "$DEVICE_SECRET" ]; then
+	DEVICE_SECRET="$(dd if=/dev/urandom bs=16 count=1 2>/dev/null | hexdump -ve '1/1 "%02x"')"
+fi
 
 # Guest bridge. Declared as a device section rather than the legacy
 # `option type bridge`, which is what netifd expects since OpenWrt 21.02.
@@ -33,6 +43,7 @@ EOF
 uci -q batch <<EOF
 set network.guest.delegate='0'
 set network.guest.ipv6='0'
+set network.wan6.disabled='1'
 
 delete dhcp.guest
 set dhcp.guest=dhcp
@@ -48,6 +59,10 @@ set dhcp.guest.dhcpv4='server'
 set dhcp.guest.ra='disabled'
 set dhcp.guest.dhcpv6='disabled'
 set dhcp.guest.ndp='disabled'
+delete dhcp.guest.dhcp_option_force
+add_list dhcp.guest.dhcp_option_force='114,http://home.me'
+del_list dhcp.@dnsmasq[0].address='/home.me/${GUEST_SUBNET}'
+add_list dhcp.@dnsmasq[0].address='/home.me/${GUEST_SUBNET}'
 EOF
 
 # Guest zone: forwarding to WAN is what openNDS gates. Input is rejected apart
@@ -91,7 +106,37 @@ set firewall.guest_portal.src='guest'
 set firewall.guest_portal.proto='tcp'
 set firewall.guest_portal.dest_port='2050'
 set firewall.guest_portal.target='ACCEPT'
+
+delete firewall.allow_cloud_guest
+set firewall.allow_cloud_guest=rule
+set firewall.allow_cloud_guest.name='Allow-Cloud-Guest'
+set firewall.allow_cloud_guest.src='guest'
+set firewall.allow_cloud_guest.dest='${CLOUD_ZONE}'
+set firewall.allow_cloud_guest.proto='tcp'
+set firewall.allow_cloud_guest.dest_port='${CLOUD_PORT} 8080 8443 3000 3001'
+set firewall.allow_cloud_guest.family='ipv4'
+set firewall.allow_cloud_guest.target='ACCEPT'
 EOF
+
+if [ "$CLOUD_ZONE" = "lan" ]; then
+	uci -q batch <<EOF
+delete firewall.guest_to_lan
+set firewall.guest_to_lan=forwarding
+set firewall.guest_to_lan.src='guest'
+set firewall.guest_to_lan.dest='lan'
+
+delete firewall.guest_to_lan_nat
+set firewall.guest_to_lan_nat=nat
+set firewall.guest_to_lan_nat.name='Guest-to-LAN-Masquerade'
+set firewall.guest_to_lan_nat.src='lan'
+set firewall.guest_to_lan_nat.src_ip='192.168.100.0/24'
+set firewall.guest_to_lan_nat.target='MASQUERADE'
+set firewall.guest_to_lan_nat.family='ipv4'
+EOF
+else
+	uci -q delete firewall.guest_to_lan
+	uci -q delete firewall.guest_to_lan_nat
+fi
 
 # Open guest SSID on the first radio when wireless hardware exists. On x86_64
 # VMs and other headless targets there is no radio; attach spare Ethernet
@@ -117,23 +162,24 @@ else
 	uci add_list network.guest_dev.ports='eth1'
 fi
 
-# openNDS in FAS level 4: the portal runs in the cloud and authorises clients
-# by writing to the authmon queue, so the router never trusts client input.
+# openNDS in FAS level 1: the cloud login page sends the client through
+# opennds_auth and then redirects into the user portal.
 [ -n "$(uci -q get opennds.@opennds[0])" ] || uci -q add opennds opennds
 
 uci -q batch <<EOF
 set opennds.@opennds[0].enabled='1'
 set opennds.@opennds[0].gatewayinterface='br-guest'
-set opennds.@opennds[0].gatewayname='NewWiFI'
+set opennds.@opennds[0].gatewayname='${DEVICE_ID}'
 set opennds.@opennds[0].gatewayfqdn='home.me'
 set opennds.@opennds[0].statuspath='/usr/lib/nds-hooks/client_status.sh'
-set opennds.@opennds[0].fas_secure_enabled='4'
+set opennds.@opennds[0].fas_secure_enabled='1'
 set opennds.@opennds[0].fasremotefqdn='${CLOUD_HOST}'
 set opennds.@opennds[0].fasport='${CLOUD_PORT}'
 set opennds.@opennds[0].faspath='${CLOUD_PATH}'
 set opennds.@opennds[0].binauth='/usr/lib/nds-hooks/binauth.sh'
 set opennds.@opennds[0].sessiontimeout='0'
 set opennds.@opennds[0].checkinterval='5'
+set opennds.@opennds[0].fwhook_enabled='1'
 delete opennds.@opennds[0].walledgarden_fqdn_list
 add_list opennds.@opennds[0].walledgarden_fqdn_list='${CLOUD_HOST}'
 delete opennds.@opennds[0].walledgarden_port_list
@@ -142,7 +188,10 @@ add_list opennds.@opennds[0].walledgarden_port_list='${CLOUD_PORT}'
 EOF
 
 uci -q batch <<EOF
-set nds-agent.main.cloud_url='https://${CLOUD_HOST}:${CLOUD_PORT}'
+set nds-agent.main.cloud_url='${CLOUD_SCHEME}://${CLOUD_HOST}:${CLOUD_PORT}'
+set nds-agent.main.device_id='${DEVICE_ID}'
+set nds-agent.main.device_secret='${DEVICE_SECRET}'
+set nds-agent.main.report_interval='30'
 EOF
 
 for cfg in network dhcp firewall wireless opennds nds-agent; do

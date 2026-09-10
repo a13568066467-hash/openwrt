@@ -1,6 +1,6 @@
 # OpenWrt WiFi 认证计费系统
 
-基于 OpenWrt 25.12.5 + openNDS (FAS level 4) 的 WiFi 认证与流量计费平台。
+基于 OpenWrt 25.12.5 + openNDS (FAS level 1) 的 WiFi 认证与流量计费平台。
 
 ## 项目结构
 
@@ -53,10 +53,11 @@ cd user-web && npm install && npm run dev
 
 ## 架构要点
 
-- **认证**：openNDS FAS level 4，登录页托管在云端 Go 服务
+- **认证**：openNDS FAS level 1，登录页托管在云端 Go 服务，认证成功后经网关放行并回跳用户中心
 - **计量**：nds-agent (ucode) 每 5 秒合计上下行流量，超额 deauth
-- **上报**：60 秒增量上报，session_key + seq 幂等
+- **上报**：30 秒增量上报，session_key + seq 幂等
 - **断网降级**：本地额度缓存，恢复后补报
+- **设备身份**：批量固件默认每台路由生成唯一 `device_id` / `device_secret`，用受控注册 token 登记到云端
 
 ## 文档
 

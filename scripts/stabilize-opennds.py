@@ -30,7 +30,7 @@ sleep 4
 ifup guest
 sleep 3
 ip link set br-guest up
-uci set opennds.@opennds[0].fwhook_enabled='0'
+uci set opennds.@opennds[0].fwhook_enabled='1'
 uci set opennds.@opennds[0].enabled='1'
 uci commit opennds
 /etc/init.d/opennds enable

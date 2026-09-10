@@ -26,7 +26,7 @@ HOSTS = [
     "192.168.10.1",
 ]
 USER = os.environ.get("NDS_ROUTER_USER", "root")
-PASSWORD = os.environ.get("NDS_ROUTER_PASS", "1234567890")
+PASSWORD = os.environ.get("NDS_ROUTER_PASS") or os.environ.get("NDS_ROUTER_PASSWORD", "1234567890")
 
 
 def upload(client: paramiko.SSHClient, local: Path, remote: str) -> None:

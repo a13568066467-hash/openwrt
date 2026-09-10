@@ -31,6 +31,9 @@ echo "--eth1-in-br--"; ip link show master br-guest 2>/dev/null | grep -c eth1 |
 echo "--guest-ipv6--"; ip -6 addr show br-guest 2>/dev/null | grep -c 'scope global'
 echo "--nds-fas-level--"; uci -q get opennds.@opennds[0].fas_secure_enabled
 echo "--nds-binauth--"; uci -q get opennds.@opennds[0].binauth
+echo "--agent-report-interval--"; uci -q get nds-agent.main.report_interval
+echo "--agent-device-id--"; uci -q get nds-agent.main.device_id
+echo "--agent-device-secret--"; uci -q get nds-agent.main.device_secret | wc -c
 echo "--fw-guest-rules--"; uci show firewall 2>/dev/null | grep -c 'Allow-.*-Guest'
 echo "--agent-syntax--"; ucode -R -e 'import { report } from "/usr/lib/nds-agent/cloud.uc"; print(type(report));' 2>&1
 echo "--opennds-log--"; logread 2>/dev/null | grep -i opennds | tail -3
@@ -86,8 +89,13 @@ expect "guest bridge has an IPv4 address" "1" "$(probe_val guest-iface)"
 expect "guest ports include eth1" "eth1" "$(probe_val guest-ports)"
 expect "eth1 is attached to br-guest" "1" "$(probe_val eth1-in-br)"
 expect "guest bridge has no global IPv6" "0" "$(probe_val guest-ipv6)"
-expect "openNDS runs at FAS level 4" "4" "$(probe_val nds-fas-level)"
+expect "openNDS runs at FAS level 1" "1" "$(probe_val nds-fas-level)"
 expect "binauth points at our hook" "/usr/lib/nds-hooks/binauth.sh" "$(probe_val nds-binauth)"
+expect "agent reports every 30 seconds" "30" "$(probe_val agent-report-interval)"
+printf '  %-44s ' "agent device id present"
+if [ -n "$(probe_val agent-device-id)" ]; then echo "PASS"; else echo "FAIL"; FAIL=1; fi
+printf '  %-44s ' "agent device secret present"
+if [ "$(probe_val agent-device-secret)" -ge 16 ]; then echo "PASS"; else echo "FAIL"; FAIL=1; fi
 expect "guest firewall rules present" "3" "$(probe_val fw-guest-rules)"
 expect "agent modules load on target" "function" "$(probe_val agent-syntax)"
 

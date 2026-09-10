@@ -14,7 +14,7 @@ HOSTS = (
     os.environ.get("NDS_ROUTER_HOST", "192.168.1.1"),
     "192.168.10.1",
 )
-PASSWORD = os.environ.get("NDS_ROUTER_PASS", "1234567890")
+PASSWORD = os.environ.get("NDS_ROUTER_PASSWORD") or os.environ["NDS_ROUTER_PASS"]
 
 
 def upload(client: paramiko.SSHClient, local: Path, remote: str, mode: int = 0o755) -> None:
@@ -59,7 +59,8 @@ def main() -> None:
 
         setup = r"""
 set -e
-uci set opennds.@opennds[0].gatewayname='NewWiFI'
+DEVICE_ID="$(uci -q get nds-agent.main.device_id || echo NewWiFI)"
+uci set opennds.@opennds[0].gatewayname="$DEVICE_ID"
 uci set opennds.@opennds[0].gatewayfqdn='home.me'
 uci set opennds.@opennds[0].statuspath='/usr/lib/nds-hooks/client_status.sh'
 uci commit opennds
